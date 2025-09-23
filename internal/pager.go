@@ -108,7 +108,7 @@ type Pager struct {
 	// Bookmarks that you can come back to.
 	//
 	// Ref: https://github.com/walles/moor/issues/175
-	marks map[rune]scrollPosition
+	bookmarks map[rune]scrollPosition
 
 	AfterExit func() error
 }
@@ -356,7 +356,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 	p.screen = screen
 	p.mode = PagerModeViewing{pager: p}
-	p.marks = make(map[rune]scrollPosition)
+	p.bookmarks = make(map[rune]scrollPosition)
 
 	// Make sure the reader knows how many lines we want
 	p.setTargetLine(p.TargetLine)
@@ -500,9 +500,6 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 		case eventSpinnerUpdate:
 			spinner = event.spinner
 
-		case twin.EventTerminalBackgroundDetected:
-			// Do nothing, we don't care about background color updates
-
 		default:
 			log.Warnf("Unhandled event type: %v", event)
 		}
@@ -520,7 +517,7 @@ func fitsOnOneScreen(reader *reader.ReaderImpl, width int, height int) bool {
 
 	lines := reader.GetLines(linemetadata.Index{}, reader.GetLineCount())
 	for _, line := range lines.Lines {
-		rendered := line.HighlightedTokens(twin.StyleDefault, nil, nil).StyledRunes
+		rendered := line.HighlightedTokens(twin.StyleDefault, twin.StyleDefault, nil, nil).StyledRunes
 		if len(rendered) > width {
 			// This line is too long to fit on one screen line, no fit
 			return false
