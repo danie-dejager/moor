@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.3.0
+Version: 2.4.0
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,8 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Mon Sep 29 2025 - Danie de Jager <danie.dejager@gmail.com>- 2.4.0-1
+- Default tab size to 8 to be like less
 * Thu Sep 25 2025 - Danie de Jager <danie.dejager@gmail.com>- 2.3.0-1
 - Support opening multiple files
 * Wed Sep 24 2025 - Danie de Jager <danie.dejager@gmail.com>- 2.2.1-1
