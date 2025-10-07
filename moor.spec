@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.4.1
+Version: 2.5.0
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,8 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Tue Oct 7 2025 - Danie de Jager <danie.dejager@gmail.com>- 2.5.0-1
+- Make forward search find sideways matches
 * Fri Oct 3 2025 - Danie de Jager <danie.dejager@gmail.com>- 2.4.1-1
 - Match less' behavior with piped stdin
 * Mon Sep 29 2025 - Danie de Jager <danie.dejager@gmail.com>- 2.4.0-1
