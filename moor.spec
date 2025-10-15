@@ -44,7 +44,10 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Wed Oct 15 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.5.2-1
+- Center search hits vertically
 * Sun Oct 12 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.5.1-1
+- Backwards searching now scrolls sideways as needed
 * Tue Oct 7 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.5.0-1
 - Make forward search find sideways matches
 * Fri Oct 3 2025 - Danie de Jager <danie.dejager@gmail.com>- 2.4.1-1
