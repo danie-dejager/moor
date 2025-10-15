@@ -59,6 +59,7 @@ func (p *Pager) scrollToSearchHits() {
 	if !p.searchHitIsVisible() {
 		p.scrollRightToSearchHits()
 	}
+	p.centerSearchHitsVertically()
 }
 
 // Scroll to the next search hit, when the user presses 'n'.
@@ -115,6 +116,7 @@ func (p *Pager) scrollToNextSearchHit() {
 	if !p.searchHitIsVisible() {
 		p.scrollRightToSearchHits()
 	}
+	p.centerSearchHitsVertically()
 }
 
 // Scroll backwards to the previous search hit, while the user is typing the
@@ -173,6 +175,7 @@ func (p *Pager) scrollToSearchHitsBackwards() {
 	if !p.searchHitIsVisible() {
 		p.scrollLeftToSearchHits()
 	}
+	p.centerSearchHitsVertically()
 }
 
 // Scroll backwards to the previous search hit, when the user presses 'N'.
@@ -230,6 +233,7 @@ func (p *Pager) scrollToPreviousSearchHit() {
 	if !p.searchHitIsVisible() {
 		p.scrollLeftToSearchHits()
 	}
+	p.centerSearchHitsVertically()
 }
 
 // Search input lines. Not screen lines!
@@ -342,8 +346,6 @@ func (p *Pager) findFirstHit(startPosition linemetadata.Index, beforePosition *l
 //
 // This method will run over multiple chunks of the input file in parallel to
 // help large file search performance.
-//
-// FIXME: We should take startPosition.deltaScreenLines into account as well!
 func _findFirstHit(reader reader.Reader, startPosition linemetadata.Index, pattern regexp.Regexp, beforePosition *linemetadata.Index, backwards bool) *linemetadata.Index {
 	searchPosition := startPosition
 	for {
@@ -394,6 +396,54 @@ func (p *Pager) searchHitIsVisible() bool {
 
 	// No search hits found
 	return false
+}
+
+func (p *Pager) centerSearchHitsVertically() {
+	if p.WrapLongLines {
+		// FIXME: Centering is not supported when wrapping, future improvement!
+		return
+	}
+
+	for {
+		rendered := p.renderLines()
+		firstHitRow := -1
+		lastHitRow := -1
+		for rowIndex, row := range rendered.inputLines {
+			if !p.searchPattern.MatchString(row.Plain()) {
+				continue
+			}
+
+			if firstHitRow == -1 {
+				firstHitRow = rowIndex
+			}
+			lastHitRow = rowIndex
+		}
+
+		if firstHitRow == -1 || lastHitRow == -1 {
+			log.Warn("No hits found while centering, how did we get here?")
+			return
+		}
+
+		// If the visible height is 1, the center screen row is 0.
+		centerScreenRowDoubled := p.visibleHeight() - 1
+
+		centerHitRowDoubled := firstHitRow + lastHitRow
+
+		// Divide by 2 here to get the amount of rows we need to scroll. We
+		// postponed the division by 2 until now to avoid rounding errors.
+		//
+		// If the center screen row is 1 (3 lines visible), and the center hit
+		// row is 2 (last screen line), we need to arrow down once.
+		deltaRows := (centerHitRowDoubled - centerScreenRowDoubled) / 2
+
+		newScrollPosition := p.scrollPosition.NextLine(deltaRows)
+		if p.ScrollPositionsEqual(p.scrollPosition, newScrollPosition) {
+			// No change, done!
+			return
+		}
+
+		p.scrollPosition = newScrollPosition
+	}
 }
 
 // If we are alredy too far right when you call this method, it will scroll
