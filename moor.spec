@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.5.1
+Version: 2.5.2
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
