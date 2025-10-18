@@ -536,10 +536,10 @@ func pagerFromArgs(
 	shouldFormat := *reFormat
 	readerOptions := reader.ReaderOptions{Lexer: *lexer, ShouldFormat: shouldFormat}
 
-	// MAN_PN is set by GNU man. Example value: "printf(1)"
-	stdinName := os.Getenv("MAN_PN")
-	if stdinName == "" {
-		stdinName = "<stdin>"
+	stdinName := ""
+	if os.Getenv("MAN_PN") != "" {
+		// MAN_PN is set by GNU man. Example value: "printf(1)"
+		stdinName = os.Getenv("MAN_PN")
 	}
 
 	// Display the input file(s) contents
@@ -709,10 +709,7 @@ func startPaging(pager *internal.Pager, screen twin.Screen, chromaStyle *chroma.
 		}
 
 		if !pager.DeInit {
-			err := pager.ReprintAfterExit()
-			if err != nil {
-				log.Error("Failed reprinting pager view after exit: ", err)
-			}
+			pager.ReprintAfterExit()
 		}
 
 		if pager.AfterExit != nil {
