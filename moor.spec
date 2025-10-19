@@ -1,10 +1,10 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.5.2
+Version: 2.6.1
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
-Source0: https://github.com/walles/moor/archive/refs/tags/v%{version}.tar.gz
+Source0: https//github.com/walles/moor/archive/refs/tags/v%{version}.tar.gz
 
 %define debug_package %{nil}
 
@@ -44,6 +44,9 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Sun Oct 19 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.6.1-1
+- Support `#` in URLs 
+- Add QuitIfOneScreen and NoLineNumbers to embed API
 * Wed Oct 15 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.5.2-1
 - Center search hits vertically
 * Sun Oct 12 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.5.1-1
