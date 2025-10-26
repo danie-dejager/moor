@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.6.1
+Version: 2.7.1
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,9 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Sun Oct 26 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.7.1-1
+- Improve --terminal-fg with terminal bg images
+- Use PAGER_LABEL env var to label stdin
 * Sun Oct 19 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.6.1-1
 - Support `#` in URLs 
 - Add QuitIfOneScreen and NoLineNumbers to embed API
