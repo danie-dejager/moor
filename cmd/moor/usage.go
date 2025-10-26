@@ -70,7 +70,11 @@ func renderPagerEnvVar(name string, colors twin.ColorCount) string {
 		return ""
 	}
 
-	absEnvValue, err := absLookPath(value)
+	// You can actually have command line arguments in these variables (like
+	// MANPAGER="moor --reformat"), so we want to look at only the first word to
+	// find out whether this PAGER variable is pointing to the right binary.
+	firstWord := strings.Fields(value)[0]
+	absEnvValue, err := absLookPath(firstWord)
 	if err != nil {
 		// This can happen if this is set to some outdated value
 		absEnvValue = value
