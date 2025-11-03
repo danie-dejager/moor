@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.7.1
+Version: 2.8.1
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,10 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Mon Nov 3 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.8.1-1
+- searching could sometimes scroll right
+- before this release, in Kitty and some other terminals, mouse selection didn't work while content was still loading. This should now be fixed.
+- Add LESSSECURE=1 secure mode for systemctl
 * Sun Oct 26 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.7.1-1
 - Improve --terminal-fg with terminal bg images
 - Use PAGER_LABEL env var to label stdin
