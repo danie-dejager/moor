@@ -108,6 +108,14 @@ func pickAnEditor() (string, string, error) {
 }
 
 func handleEditingRequest(p *Pager) {
+	if os.Getenv("LESSSECURE") == "1" {
+		p.mode = &PagerModeInfo{
+			Pager: p,
+			Text:  "Not launching editor since LESSSECURE=1 is set in the environment",
+		}
+		return
+	}
+
 	editor, editorEnv, err := pickAnEditor()
 	if err != nil {
 		log.Warn("Failed to find an editor: ", err)
