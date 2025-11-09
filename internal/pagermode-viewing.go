@@ -21,10 +21,15 @@ func (m PagerModeViewing) drawFooter(statusText string, spinner string) {
 		colonHelp = "':' to switch, "
 	}
 	m.pager.readerLock.Unlock()
-	helpText := "Press 'ESC' / 'q' to exit, " + colonHelp + "'/' to search, '&' to filter, 'h' for help"
+
+	searchHelp := "'/' to search"
+	if len(m.pager.searchString) > 0 {
+		searchHelp = "'n'/'p' to search next/previous"
+	}
+	helpText := "Press 'ESC' / 'q' to exit, " + colonHelp + searchHelp + ", '&' to filter, 'h' for help"
 
 	if m.pager.isShowingHelp {
-		helpText = "Press 'ESC' / 'q' to exit help, '/' to search"
+		helpText = "Press 'ESC' / 'q' to exit help, " + searchHelp
 		prefix = ""
 	}
 
@@ -202,6 +207,11 @@ func (m PagerModeViewing) onRune(char rune) {
 
 	case 'w':
 		p.WrapLongLines = !p.WrapLongLines
+		if p.WrapLongLines {
+			p.mode = &PagerModeInfo{Pager: p, Text: "Word wrapping enabled"}
+		} else {
+			p.mode = &PagerModeInfo{Pager: p, Text: "Word wrapping disabled"}
+		}
 
 	case '\x14': // CTRL-t
 		p.cycleTabSize()
