@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.8.2
+Version: 2.9.0
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,8 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Fri Nov 14 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.0-1
+- Add persistent search history
 * Sun Nov 9 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.8.2-1
 - Fix search hit line highlighting with word wrapping enabled.
 - Show keyboard help while searching
