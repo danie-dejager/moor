@@ -66,6 +66,10 @@ type Pager struct {
 
 	searchString  string
 	searchPattern *regexp.Regexp
+
+	// This should never be null while paging. Configured in NewPager().
+	searchHistory *SearchHistory
+
 	filterPattern *regexp.Regexp
 
 	// We used to have a "Following" field here. If you want to follow, set
@@ -240,6 +244,9 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 		BackingReader: readers[0], // Always start with the first reader
 		FilterPattern: &pager.filterPattern,
 	}
+
+	searchHistory := BootSearchHistory("")
+	pager.searchHistory = &searchHistory
 
 	return &pager
 }
@@ -451,8 +458,6 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 	consumeLessTermcapEnvs(screen.TerminalBackground(), chromaStyle, chromaFormatter)
 	styleUI(screen.TerminalBackground(), chromaStyle, chromaFormatter, p.StatusBarStyle, p.WithTerminalFg, p.WithSearchHitLineBackground)
 
-	searchHistory = loadSearchHistory()
-
 	p.screen = screen
 	p.mode = PagerModeViewing{pager: p}
 	p.bookmarks = make(map[rune]scrollPosition)
@@ -629,8 +634,17 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			}
 
 		case eventMaybeDone:
-			// Do nothing. We got this just so that we'll do the QuitIfOneScreen
-			// check (above) as soon as highlighting is done.
+			// Man pages come pre-formatted for the screen width, and line
+			// numbers will mess that up. So we disable line numbers if we
+			// detect a man page by its contents.
+			//
+			// See also noLineNumbersDefault() where we use environment
+			// variables to try to detect man paging.
+			if p.haveLoadedManPage() && len(p.readers) == 1 {
+				p.ShowLineNumbers = false
+				p.showLineNumbers = false
+				log.Info("man page detected by contents, disabling line numbers")
+			}
 
 		case eventSpinnerUpdate:
 			spinner = event.spinner
