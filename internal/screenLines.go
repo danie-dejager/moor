@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/reader"
@@ -104,11 +105,11 @@ func (p *Pager) renderLines() renderedScreen {
 }
 
 func (p *Pager) internalRenderLines(highlightSearchHitLines bool) renderedScreen {
-	var lineIndex linemetadata.Index
+	var lineIndexToShow linemetadata.Index
 	if p.lineIndex() != nil {
-		lineIndex = *p.lineIndex()
+		lineIndexToShow = *p.lineIndex()
 	}
-	inputLines := p.Reader().GetLines(lineIndex, p.visibleHeight())
+	inputLines := p.Reader().GetLines(lineIndexToShow, p.visibleHeight())
 	if len(inputLines.Lines) == 0 {
 		// Empty input, empty output
 		return renderedScreen{statusText: inputLines.StatusText}
@@ -158,8 +159,16 @@ func (p *Pager) internalRenderLines(highlightSearchHitLines bool) renderedScreen
 		}
 	}
 	if firstVisibleIndex == -1 {
-		panic(fmt.Errorf("scrollPosition %#v not found in allLines size %d",
-			p.scrollPosition, len(allLines)))
+		allLinesDescription := fmt.Sprintf("size %d", len(allLines))
+		if len(allLines) > 0 {
+			allLinesDescription += fmt.Sprintf(", indexed %d-%d:\n",
+				allLines[0].inputLineIndex, allLines[len(allLines)-1].inputLineIndex)
+		}
+		panic(fmt.Errorf("scrollPosition index=%d not found in allLines %s:\n%s",
+			lineIndexToShow,
+			allLinesDescription,
+			spew.Sdump(p.scrollPosition),
+		))
 	}
 
 	// Drop the lines that should go above the screen
