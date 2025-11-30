@@ -80,7 +80,7 @@ func TestTokenize(t *testing.T) {
 				log.SetOutput(&loglines)
 
 				tokens := StyledRunesFromString(twin.StyleDefault, line, lineIndex).StyledRunes
-				plainString := WithoutFormatting(line, lineIndex)
+				plainString := StripFormatting(line, *lineIndex)
 				if len(tokens) != utf8.RuneCountInString(plainString) {
 					t.Errorf("%s:%s: len(tokens)=%d, len(plainString)=%d for: <%s>",
 						fileName, lineIndex.Format(),
@@ -336,4 +336,58 @@ func TestRawUpdateStyleResetDoesNotAffectHyperlink(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Assert(t, updated.HyperlinkURL() != nil)
 	assert.Equal(t, *updated.HyperlinkURL(), url)
+}
+
+// Benchmark stripping formatting from a colored git diff sample.
+// To run:
+//
+//	go test -bench=BenchmarkStripFormatting -benchmem ./...
+func BenchmarkStripFormatting(b *testing.B) {
+	// Load sample input once
+	data, err := os.ReadFile(path.Join(samplesDir, "gitdiff-color.txt"))
+	if err != nil {
+		b.Fatalf("read sample: %v", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	// Set processed bytes per iteration
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			// We ignore the output; benchmarking execution time only
+			_ = StripFormatting(line, linemetadata.Index{})
+		}
+	}
+}
+
+// Benchmark stripping formatting from a colored git diff sample.
+// To run:
+//
+//	go test -bench=BenchmarkStripFormattingUnformattedInput -benchmem ./...
+func BenchmarkStripFormattingUnformattedInput(b *testing.B) {
+	// Load sample input once
+	data, err := os.ReadFile(path.Join(samplesDir, "gitdiff-color.txt"))
+	if err != nil {
+		b.Fatalf("read sample: %v", err)
+	}
+
+	// Remove formatting before benchmarking
+	var unformatted strings.Builder
+	formattedLines := strings.Split(string(data), "\n")
+	for _, line := range formattedLines {
+		unformatted.WriteString(StripFormatting(line, linemetadata.Index{}))
+		unformatted.WriteString("\n")
+	}
+
+	lines := strings.Split(unformatted.String(), "\n")
+	// Set processed bytes per iteration
+	b.SetBytes(int64(len(unformatted.String())))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			// We ignore the output; benchmarking execution time only
+			_ = StripFormatting(line, linemetadata.Index{})
+		}
+	}
 }

@@ -27,7 +27,10 @@ func renderedToString(row []textstyles.CellWithMetadata) string {
 }
 
 func testHorizontalCropping(t *testing.T, contents string, firstVisibleColumn int, lastVisibleColumn int, expected string) {
-	pager := NewPager(nil)
+	reader := reader.NewFromTextForTesting("testHorizontalCropping", contents)
+	assert.NilError(t, reader.Wait())
+
+	pager := NewPager(reader)
 	pager.ShowLineNumbers = false
 	pager.showLineNumbers = false
 
@@ -35,11 +38,10 @@ func testHorizontalCropping(t *testing.T, contents string, firstVisibleColumn in
 	pager.leftColumnZeroBased = firstVisibleColumn
 	pager.scrollPosition = newScrollPosition("testHorizontalCropping")
 
-	lineContents := reader.NewLine(contents)
-	numberedLine := reader.NumberedLine{
-		Line: &lineContents,
-	}
-	screenLine := pager.renderLine(&numberedLine, pager.getLineNumberPrefixLength(numberedLine.Number), true)
+	numberedLine := reader.GetLine(linemetadata.IndexFromZeroBased(0))
+	assert.Assert(t, numberedLine != nil)
+
+	screenLine := pager.renderLine(*numberedLine, pager.getLineNumberPrefixLength(numberedLine.Number), true)
 	assert.Equal(t, renderedToString(screenLine[0].cells), expected)
 }
 
@@ -109,16 +111,13 @@ func TestEmpty(t *testing.T) {
 
 // Repro case for a search bug discovered in v1.9.8.
 func TestSearchHighlight(t *testing.T) {
-	line := reader.NewLine("x\"\"x")
+	numberedLine := reader.NewFromTextForTesting("TestSearchHighlight", "x\"\"x").GetLine(linemetadata.Index{})
 	pager := Pager{
 		screen:        twin.NewFakeScreen(100, 10),
 		searchPattern: regexp.MustCompile("\""),
 	}
 
-	numberedLine := reader.NumberedLine{
-		Line: &line,
-	}
-	rendered := pager.renderLine(&numberedLine, pager.getLineNumberPrefixLength(numberedLine.Number), true)
+	rendered := pager.renderLine(*numberedLine, pager.getLineNumberPrefixLength(numberedLine.Number), true)
 	assert.DeepEqual(t, []renderedLine{
 		{
 			inputLineIndex:    linemetadata.Index{},

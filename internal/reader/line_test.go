@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/textstyles"
 	"github.com/walles/moor/v2/twin"
 	"gotest.tools/v3/assert"
@@ -20,11 +21,10 @@ func TestHighlightedTokensWithManPageHeading(t *testing.T) {
 		manPageHeading += string(char) + "\b" + string(char)
 	}
 
-	line := NewLine(manPageHeading)
-	highlighted := line.HighlightedTokens(twin.StyleDefault, twin.StyleDefault, nil, nil)
+	highlighted := textstyles.StyledRunesFromString(twin.StyleDefault, manPageHeading, nil).StyledRunes
 
-	assert.Equal(t, len(highlighted.StyledRunes), len(headingText))
-	for i, cell := range highlighted.StyledRunes {
+	assert.Equal(t, len(highlighted), len(headingText))
+	for i, cell := range highlighted {
 		assert.Equal(t, cell.Rune, rune(headingText[i]))
 		assert.Equal(t, cell.Style, textstyles.ManPageHeading)
 	}
@@ -38,11 +38,11 @@ func TestHighlightedTokensWithManPageHeading(t *testing.T) {
 // single-width here so rune index == screen column.
 func TestSearchHitSpanningWrapBoundary(t *testing.T) {
 	// Arrange: a line where the search hit crosses index 5
-	line := NewLine("0123456789")
+	line := NewFromTextForTesting("TestSearchHitSpanningWrapBoundary", "0123456789").GetLine(linemetadata.Index{}).Line
 	// Match runs from indices 3..8 inclusive ("345678")
 	pattern := regexp.MustCompile("345678")
 	searchHitStyle := twin.StyleDefault.WithForeground(twin.NewColor16(3))
-	highlighted := line.HighlightedTokens(twin.StyleDefault, searchHitStyle, pattern, nil)
+	highlighted := line.HighlightedTokens(twin.StyleDefault, searchHitStyle, pattern, linemetadata.Index{})
 
 	// Sanity: overall line reports having a search hit
 	assert.Assert(t, highlighted.ContainsSearchHit, "Expected overall line to contain search hit")

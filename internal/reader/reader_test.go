@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"math"
 	"os"
 	"os/exec"
 	"path"
@@ -566,6 +567,43 @@ func TestReadUpdatingFile_HalfUtf8(t *testing.T) {
 	assert.Equal(t, int(testMe.bytesCount), len([]byte("här")))
 }
 
+func TestClipRangeToLength(t *testing.T) {
+	// Within bounds
+	i0, i1 := clipRangeToLength(linemetadata.Index{}, 1, 20)
+	assert.Equal(t, i0, 0)
+	assert.Equal(t, i1, 0)
+
+	// Touching the end, still within bounds
+	i0, i1 = clipRangeToLength(linemetadata.Index{}, 1, 0)
+	assert.Equal(t, i0, 0)
+	assert.Equal(t, i1, 0)
+
+	// Overflow, push down to indices 6, 7, 8
+	i0, i1 = clipRangeToLength(linemetadata.IndexFromOneBased(100), 3, 8)
+	assert.Equal(t, i0, 6)
+	assert.Equal(t, i1, 8)
+
+	// Overflow, push down and clip to indices 0, 1
+	i0, i1 = clipRangeToLength(linemetadata.IndexFromOneBased(100), 3, 1)
+	assert.Equal(t, i0, 0)
+	assert.Equal(t, i1, 1)
+
+	// Maxed out start
+	i0, i1 = clipRangeToLength(linemetadata.IndexMax(), 1, 0)
+	assert.Equal(t, i0, 0)
+	assert.Equal(t, i1, 0)
+
+	// Maxed out count
+	i0, i1 = clipRangeToLength(linemetadata.Index{}, math.MaxInt, 0)
+	assert.Equal(t, i0, 0)
+	assert.Equal(t, i1, 0)
+
+	// Maxed out start and count
+	i0, i1 = clipRangeToLength(linemetadata.IndexMax(), math.MaxInt, 3)
+	assert.Equal(t, i0, 0)
+	assert.Equal(t, i1, 3)
+}
+
 // How long does it take to read a file?
 //
 // This can be slow due to highlighting.
@@ -611,6 +649,8 @@ func BenchmarkReadLargeFile(b *testing.B) {
 
 	// Make sure we don't pause during the benchmark
 	targetLineCount := largeSizeBytes * 2
+
+	b.SetBytes(int64(totalBytesWritten))
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {

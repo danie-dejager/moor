@@ -26,7 +26,7 @@ type FilteringReader struct {
 	lock sync.Mutex
 
 	// nil means no filtering has happened yet
-	filteredLinesCache *[]*reader.NumberedLine
+	filteredLinesCache *[]reader.NumberedLine
 
 	// This is what the reader's line count was when we filtered. If the
 	// reader's current line count doesn't match, then our cache needs to be
@@ -42,7 +42,7 @@ type FilteringReader struct {
 func (f *FilteringReader) rebuildCache() {
 	t0 := time.Now()
 
-	cache := make([]*reader.NumberedLine, 0)
+	cache := make([]reader.NumberedLine, 0)
 	filterPattern := *f.FilterPattern
 
 	// Mark cache base conditions
@@ -53,12 +53,12 @@ func (f *FilteringReader) rebuildCache() {
 	allBaseLines := f.BackingReader.GetLines(linemetadata.Index{}, math.MaxInt)
 	resultIndex := 0
 	for _, line := range allBaseLines.Lines {
-		if filterPattern != nil && len(filterPattern.String()) > 0 && !filterPattern.MatchString(line.Line.Plain(&line.Index)) {
+		if filterPattern != nil && len(filterPattern.String()) > 0 && !filterPattern.MatchString(line.Line.Plain(line.Index)) {
 			// We have a pattern but it doesn't match
 			continue
 		}
 
-		cache = append(cache, &reader.NumberedLine{
+		cache = append(cache, reader.NumberedLine{
 			Line:   line.Line,
 			Index:  linemetadata.IndexFromZeroBased(resultIndex),
 			Number: line.Number,
@@ -72,7 +72,7 @@ func (f *FilteringReader) rebuildCache() {
 		len(allBaseLines.Lines)-len(cache), len(allBaseLines.Lines), time.Since(t0))
 }
 
-func (f *FilteringReader) getAllLines() []*reader.NumberedLine {
+func (f *FilteringReader) getAllLines() []reader.NumberedLine {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -138,7 +138,7 @@ func (f *FilteringReader) GetLine(index linemetadata.Index) *reader.NumberedLine
 	if index.Index() < 0 || index.Index() >= len(allLines) {
 		return nil
 	}
-	return allLines[index.Index()]
+	return &allLines[index.Index()]
 }
 
 func (f *FilteringReader) GetLines(firstLine linemetadata.Index, wantedLineCount int) reader.InputLines {
@@ -172,6 +172,16 @@ func (f *FilteringReader) GetLines(firstLine linemetadata.Index, wantedLineCount
 		Lines:      acceptedLines[firstLine.Index() : firstLine.Index()+wantedLineCount],
 		StatusText: f.createStatus(&lastLine),
 	}
+}
+
+func (f *FilteringReader) GetLinesPreallocated(firstLine linemetadata.Index, resultLines *[]reader.NumberedLine) string {
+	if f.shouldPassThrough() {
+		return f.BackingReader.GetLinesPreallocated(firstLine, resultLines)
+	}
+
+	lines := f.GetLines(firstLine, cap(*resultLines))
+	*resultLines = lines.Lines
+	return lines.StatusText
 }
 
 // In the general case, this will return a text like this:
