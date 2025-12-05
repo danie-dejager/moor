@@ -3,7 +3,6 @@ package internal
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -13,6 +12,7 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/reader"
+	"github.com/walles/moor/v2/internal/search"
 	"github.com/walles/moor/v2/twin"
 	"gotest.tools/v3/assert"
 
@@ -23,7 +23,7 @@ func TestFindFirstHitSimple(t *testing.T) {
 	reader := reader.NewFromTextForTesting("TestFindFirstHitSimple", "AB")
 	assert.NilError(t, reader.Wait())
 
-	hit := FindFirstHit(reader, *toPattern("AB"), linemetadata.Index{}, nil, SearchDirectionForward)
+	hit := FindFirstHit(reader, search.For("AB"), linemetadata.Index{}, nil, SearchDirectionForward)
 	assert.Assert(t, hit.IsZero())
 }
 
@@ -31,7 +31,7 @@ func TestFindFirstHitAnsi(t *testing.T) {
 	reader := reader.NewFromTextForTesting("", "A\x1b[30mB")
 	assert.NilError(t, reader.Wait())
 
-	hit := FindFirstHit(reader, *toPattern("AB"), linemetadata.Index{}, nil, SearchDirectionForward)
+	hit := FindFirstHit(reader, search.For("AB"), linemetadata.Index{}, nil, SearchDirectionForward)
 	assert.Assert(t, hit.IsZero())
 }
 
@@ -39,7 +39,7 @@ func TestFindFirstHitNoMatch(t *testing.T) {
 	reader := reader.NewFromTextForTesting("TestFindFirstHitSimple", "AB")
 	assert.NilError(t, reader.Wait())
 
-	hit := FindFirstHit(reader, *toPattern("this pattern should not be found"), linemetadata.Index{}, nil, SearchDirectionForward)
+	hit := FindFirstHit(reader, search.For("this pattern should not be found"), linemetadata.Index{}, nil, SearchDirectionForward)
 	assert.Assert(t, hit == nil)
 }
 
@@ -49,7 +49,7 @@ func TestFindFirstHitNoMatchBackwards(t *testing.T) {
 
 	theEnd := *linemetadata.IndexFromLength(reader.GetLineCount())
 
-	hit := FindFirstHit(reader, *toPattern("this pattern should not be found"), theEnd, nil, SearchDirectionBackward)
+	hit := FindFirstHit(reader, search.For("this pattern should not be found"), theEnd, nil, SearchDirectionBackward)
 	assert.Assert(t, hit == nil)
 }
 
@@ -106,14 +106,19 @@ func benchmarkSearch(b *testing.B, highlighted bool, warm bool) {
 	benchMe := reader.NewFromTextForTesting("hello", testString)
 	assert.NilError(b, benchMe.Wait())
 
-	// The [] around the 't' is there to make sure it doesn't match, remember
-	// we're searching through this very file.
-	pattern := regexp.MustCompile("This won'[t] match anything")
+	// The target string is split to not match, remember we're searching through
+	// this very file. Same string as in BenchmarkCaseInsensitiveSubstringMatch
+	// in search/search_test.go.
+	//
+	// NOTE: The search term is all lowercase to trigger case-insensitive
+	// search. I believe this is the most common case, so that's what we should
+	// benchmark.
+	search := search.For("this won't match " + "anything")
 
 	reader.DisablePlainCachingForBenchmarking = !warm
 	if warm {
 		// Warm up any caches etc by doing one search before we start measuring
-		hit := FindFirstHit(benchMe, *pattern, linemetadata.Index{}, nil, SearchDirectionForward)
+		hit := FindFirstHit(benchMe, search, linemetadata.Index{}, nil, SearchDirectionForward)
 		if hit != nil {
 			panic(fmt.Errorf("This test is meant to scan the whole file without finding anything"))
 		}
@@ -128,7 +133,7 @@ func benchmarkSearch(b *testing.B, highlighted bool, warm bool) {
 
 	for range b.N {
 		// This test will search through all the N copies we made of our file
-		hit := FindFirstHit(benchMe, *pattern, linemetadata.Index{}, nil, SearchDirectionForward)
+		hit := FindFirstHit(benchMe, search, linemetadata.Index{}, nil, SearchDirectionForward)
 
 		if hit != nil {
 			panic(fmt.Errorf("This test is meant to scan the whole file without finding anything"))
@@ -150,13 +155,6 @@ func BenchmarkHighlightedColdSearch(b *testing.B) {
 // Run with: go test -run='^$' -bench=. . ./...
 func BenchmarkPlainTextColdSearch(b *testing.B) {
 	benchmarkSearch(b, false, false)
-}
-
-// How long does it take to search a highlighted file for some regex the second time?
-//
-// Run with: go test -run='^$' -bench=. . ./...
-func BenchmarkHighlightedWarmSearch(b *testing.B) {
-	benchmarkSearch(b, true, true)
 }
 
 // How long does it take to search a plain text file for some regex the second time?
