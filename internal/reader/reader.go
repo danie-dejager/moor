@@ -218,7 +218,9 @@ func (reader *ReaderImpl) readStream(stream io.Reader, formatter chroma.Formatte
 
 // Pause if we should pause, otherwise not. Pausing means waiting for
 // pauseAfterLinesUpdated to be signalled in SetPauseAfterLines().
-func (reader *ReaderImpl) maybePause() {
+func (reader *ReaderImpl) maybePause() time.Duration {
+	t0 := time.Now()
+
 	for {
 		reader.RLock()
 		shouldPause := len(reader.lines) >= reader.pauseAfterLines
@@ -227,7 +229,7 @@ func (reader *ReaderImpl) maybePause() {
 		if !shouldPause {
 			// Not there yet, no pause
 			reader.setPauseStatus(false)
-			return
+			return time.Since(t0)
 		}
 
 		reader.setPauseStatus(true)
@@ -258,7 +260,9 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 
 	t0 := time.Now()
 	for {
-		reader.maybePause()
+		// Deduct pause times so the final number says how much time we actually
+		// spent reading.
+		t0 = t0.Add(reader.maybePause())
 
 		keepReadingLine := true
 		eof := false
@@ -968,7 +972,8 @@ func clipRangeToLength(start linemetadata.Index, wantedCount int, maxIndex int) 
 // GetLines gets the indicated lines from the input
 func (reader *ReaderImpl) GetLines(firstLine linemetadata.Index, wantedLineCount int) InputLines {
 	reader.RLock()
-	if len(reader.lines) == 0 || wantedLineCount == 0 {
+	lineCount := len(reader.lines)
+	if lineCount == 0 || wantedLineCount == 0 {
 		statusText := reader.createStatusUnlocked(firstLine)
 		reader.RUnlock()
 
@@ -978,7 +983,7 @@ func (reader *ReaderImpl) GetLines(firstLine linemetadata.Index, wantedLineCount
 	}
 	reader.RUnlock()
 
-	firstLineIndex, lastLineIndex := clipRangeToLength(firstLine, wantedLineCount, len(reader.lines)-1)
+	firstLineIndex, lastLineIndex := clipRangeToLength(firstLine, wantedLineCount, lineCount-1)
 	wantedLineCount = lastLineIndex - firstLineIndex + 1
 
 	resultLines := make([]NumberedLine, 0, wantedLineCount)
