@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -214,8 +215,8 @@ func TestGetLongLine(t *testing.T) {
 	assert.Equal(t, len(lines.Lines), 1)
 
 	line := lines.Lines[0]
-	assert.Assert(t, strings.HasPrefix(line.Plain(), "1 2 3 4"), "<%s>", line)
-	assert.Assert(t, strings.HasSuffix(line.Plain(), "0123456789"), line)
+	assert.Assert(t, strings.HasPrefix(line.Plain(), "1 2 3 4"), "<%s>", line.Plain())
+	assert.Assert(t, strings.HasSuffix(line.Plain(), "0123456789"), line.Plain())
 
 	assert.Equal(t, len(line.Plain()), 100021)
 }
@@ -253,7 +254,8 @@ func TestStatusText(t *testing.T) {
 	if line.Lines != nil {
 		t.Error("line.lines is should have been nil when reading from an empty stream")
 	}
-	assert.Equal(t, line.StatusText, "empty: <empty>")
+	assert.Equal(t, line.FilenameText, "empty")
+	assert.Equal(t, line.StatusText, ": <empty>")
 }
 
 func testCompressedFile(t *testing.T, filename string) {
@@ -550,7 +552,7 @@ func TestReadUpdatingFile_HalfUtf8(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Give the reader some time to react
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		allLines := testMe.GetLines(linemetadata.Index{}, 10)
 		if len(allLines.Lines) == 2 {
 			break
@@ -651,6 +653,9 @@ func BenchmarkReadLargeFile(b *testing.B) {
 	targetLineCount := largeSizeBytes * 2
 
 	b.SetBytes(int64(totalBytesWritten))
+
+	// Try making the whole run more predictable
+	runtime.GC()
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
