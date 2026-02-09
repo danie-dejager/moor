@@ -6,7 +6,17 @@ import (
 	"github.com/walles/moor/v2/internal/linemetadata"
 )
 
-// Please create using newScrollPosition(name)
+// Says which line should be at the top of the screen.
+//
+// Using two separate numbers:
+//   - A line index into the input stream
+//   - A delta of how many screen lines to scroll down before rendering. This is
+//     needed to support scrolling through wrapped lines.
+//
+// If you put the scroll position too far down, it will be adjusted so no empty
+// lines are shown at the bottom of the screen.
+//
+// Please create using newScrollPosition(name).
 type scrollPosition struct {
 	internalDontTouch scrollPositionInternal
 }
@@ -373,20 +383,14 @@ func (p *Pager) isScrolledToEnd() bool {
 }
 
 // Returns nil if there are no lines
-func (p *Pager) getLastVisiblePosition() *scrollPosition {
+func (p *Pager) getLastVisibleLineIndex() *linemetadata.Index {
 	rendered := p.renderLines()
 	if len(rendered.lines) == 0 {
 		return nil
 	}
 
 	lastRenderedLine := rendered.lines[len(rendered.lines)-1]
-	return &scrollPosition{
-		internalDontTouch: scrollPositionInternal{
-			name:             "Last Visible Position",
-			lineIndex:        &lastRenderedLine.inputLineIndex,
-			deltaScreenLines: lastRenderedLine.wrapIndex,
-		},
-	}
+	return &lastRenderedLine.inputLineIndex
 }
 
 func (si *scrollPositionInternal) getMaxNumberPrefixLength(pager *Pager) int {
