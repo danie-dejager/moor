@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.10.3
+Version: 2.10.4
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,8 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Mon Feb 9 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.4-1
+- Fix bug pressing "n" at the bottom of the input.
 * Wed Jan 28 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.3-1
 - Fix two crashes
 * Mon Jan 19 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.2-1
