@@ -32,8 +32,8 @@ func (screen *FakeScreen) Clear() {
 	empty := NewStyledRune(' ', StyleDefault)
 
 	width, height := screen.Size()
-	for row := 0; row < height; row++ {
-		for column := 0; column < width; column++ {
+	for row := range height {
+		for column := range width {
 			screen.cells[row][column] = empty
 		}
 	}
@@ -107,10 +107,6 @@ func (screen *FakeScreen) RequestTerminalBackgroundColor() {
 
 func (screen *FakeScreen) TerminalBackground() *Color {
 	return nil
-}
-
-func (screen *FakeScreen) ShowCursorAt(_ int, _ int) {
-	// This method intentionally left blank
 }
 
 func (screen *FakeScreen) Events() chan Event {
