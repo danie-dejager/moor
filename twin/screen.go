@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -72,6 +73,10 @@ type Screen interface {
 
 	// This channel is what your main loop should be checking.
 	Events() chan Event
+
+	// Pause the screen, run the given function, then resume the screen. Blocks
+	// until the function has completed and the screen has been resumed again.
+	PauseAndCall(run func() error) error
 }
 
 type interruptableReader interface {
@@ -119,6 +124,8 @@ type UnixScreen struct {
 
 	terminalColorCount ColorCount
 	mouseMode          MouseMode
+
+	paused atomic.Bool
 }
 
 // Example event: "\x1b[<65;127;41M"
@@ -517,6 +524,11 @@ func (screen *UnixScreen) mainLoop() {
 			// Not valid, give up
 			expectingTerminalBackgroundColor = false
 			incompleteResponse = nil
+		}
+
+		if screen.paused.Load() {
+			// Ignore all input while paused
+			continue
 		}
 
 		if count > maxBytesRead {
@@ -1088,6 +1100,11 @@ func (screen *UnixScreen) showNLinesDeltaLocked(width int, height int) bool {
 		return false
 	}
 
+	if len(updatedLines) == 0 {
+		// Nothing to update, already done!
+		return true
+	}
+
 	var builder strings.Builder
 	for row, line := range updatedLines {
 		// Move cursor to the start of the line
@@ -1126,4 +1143,47 @@ func (screen *UnixScreen) showNLines(width int, height int, clearFirst bool) {
 	// Write out what we have
 	screen.writeLocked(builder.String())
 	screen.snapshotLastRenderedLocked()
+}
+
+// Pause the screen, run the given function, then resume the screen. Blocks
+// until the function has completed and the screen has been resumed again.
+//
+// Error returns mean that either pausing failed or the run function failed. If
+// resuming fails, this method will panic.
+func (screen *UnixScreen) PauseAndCall(run func() error) error {
+	screen.paused.Store(true)
+	defer screen.paused.Store(false)
+
+	screen.leaveAlternateScreenSession()
+
+	err := screen.restoreTtyInTtyOut()
+	if err != nil {
+		return fmt.Errorf("failed to restore terminal state before pause: %w", err)
+	}
+
+	runErr := run()
+
+	restoreRawErr := screen.restoreRawModeAfterResume()
+	if restoreRawErr != nil {
+		panic(fmt.Errorf("failed to resume screen after paused operation (%v): %w", runErr, restoreRawErr))
+	}
+
+	screen.enterAlternateScreenSession()
+	screen.onWindowResized()
+
+	if runErr != nil {
+		return runErr
+	}
+
+	return nil
+}
+
+func (screen *UnixScreen) restoreRawModeAfterResume() error {
+	terminalState, err := term.MakeRaw(int(screen.ttyIn.Fd()))
+	if err != nil {
+		return fmt.Errorf("failed to re-enter raw mode after suspend: %w", err)
+	}
+
+	screen.oldTerminalState = terminalState
+	return nil
 }
