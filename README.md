@@ -56,6 +56,9 @@ uses the formats declared in these environment variables if present:
 - `LESS_TERMCAP_us`: Man page <u>underline</u>
 - `LESS_TERMCAP_so`: [Status bar and search hits](https://github.com/walles/moor/issues/114)
 
+In `LESS_TERMCAP_*` values, both actual escape characters and the word `ESC` in
+caps are interpreted as escape characters. Example value: `ESC[1m`.
+
 Setting `LESSSECURE` to `1` will prevent `moor` from launching external programs
 or opening new files [as required by `systemctl(1)`][systemctlLessSecure]. In
 secure mode, the <kbd>v</kbd> command for opening the current file in an editor
@@ -66,8 +69,11 @@ For configurability reasons, `moor` reads extra command line options from the
 
 Moor is used as the default pager by:
 
-- [`px` / `ptop`](https://github.com/walles/px), `ps` and `top` for human beings
 - [`riff`](https://github.com/walles/riff), a diff filter highlighting which line parts have changed
+- [`px` / `ptop`](https://github.com/walles/px), `ps` and `top` for human beings
+- [`ftop`](https://github.com/walles/ftop), a `top` implementation which actually [embeds
+  `moor`](https://github.com/walles/ftop/blob/3786217a5923d8248f54bb747ff6bea55bd1354f/internal/ftop/pageprocessinfo.go#L93)
+  using [the embedding API](#embedding-moor-in-your-app)
 
 # Installing
 
