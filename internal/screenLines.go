@@ -18,7 +18,7 @@ type renderedLine struct {
 
 	// If an input line has been wrapped into two, the part on the second line
 	// will have a wrapIndex of 1.
-	wrapIndex int
+	wrapIndex linemetadata.ScreenLines
 
 	containsSearchHit bool
 
@@ -110,14 +110,13 @@ func (p *Pager) internalRenderLines(highlightSearchHitLines bool) renderedScreen
 	if p.lineIndex() != nil {
 		lineIndexToShow = *p.lineIndex()
 	}
-	inputLines := p.Reader().GetLines(lineIndexToShow, p.visibleHeight())
+	inputLines := p.Reader().GetLines(lineIndexToShow, int(p.visibleHeight()))
 	if len(inputLines.Lines) == 0 {
 		// Empty input, empty output
 		return renderedScreen{filenameText: inputLines.FilenameText, statusText: inputLines.StatusText}
 	}
 
-	lastVisibleLineNumber := inputLines.Lines[len(inputLines.Lines)-1].Number
-	numberPrefixLength := p.getLineNumberPrefixLength(lastVisibleLineNumber)
+	numberPrefixLength := p.scrollPosition.getMaxNumberPrefixLength(p)
 
 	allLines := make([]renderedLine, 0)
 	for _, line := range inputLines.Lines {
@@ -176,7 +175,7 @@ func (p *Pager) internalRenderLines(highlightSearchHitLines bool) renderedScreen
 	allLines = allLines[firstVisibleIndex:]
 
 	// Drop the lines that would have gone below the screen
-	wantedLineCount := p.visibleHeight()
+	wantedLineCount := int(p.visibleHeight())
 	if len(allLines) > wantedLineCount {
 		allLines = allLines[0:wantedLineCount]
 	}
@@ -261,7 +260,7 @@ func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, hig
 
 		rendered = append(rendered, renderedLine{
 			inputLineIndex:    line.Index,
-			wrapIndex:         wrapIndex,
+			wrapIndex:         linemetadata.ScreenLines(wrapIndex),
 			cells:             decorated,
 			containsSearchHit: subLine.ContainsSearchHit,
 			trailer:           subLine.Trailer,

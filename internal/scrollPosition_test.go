@@ -27,18 +27,18 @@ func testCanonicalize1000(t *testing.T, withStatusBar bool, currentStartLine lin
 	pager.ShowStatusBar = withStatusBar
 	pager.scrollPosition = scrollPosition{
 		internalDontTouch: scrollPositionInternal{
-			lineIndex:        &currentStartLine,
-			deltaScreenLines: 0,
-			name:             "findFirstHit",
-			canonicalizing:   false,
+			lineIndex:      &currentStartLine,
+			delta:          0,
+			name:           "findFirstHit",
+			canonicalizing: false,
 		},
 	}
 
 	lastVisiblePosition := scrollPosition{
 		internalDontTouch: scrollPositionInternal{
-			lineIndex:        &lastVisibleLine,
-			deltaScreenLines: 0,
-			name:             "Last Visible Position",
+			lineIndex: &lastVisibleLine,
+			delta:     0,
+			name:      "Last Visible Position",
 		},
 	}
 
@@ -69,7 +69,7 @@ func TestCanonicalize1000WithoutStatusBar(t *testing.T) {
 
 // Try scrolling between two points, on a 80 x screenHeight screen with 1492
 // lines of input.
-func tryScrollAmount(t *testing.T, scrollFrom linemetadata.Index, scrollDistance int) {
+func tryScrollAmount(t *testing.T, scrollFrom linemetadata.Index, scrollDistance linemetadata.ScreenLines) {
 	// Create 1492 lines of single-char content
 	pager := Pager{}
 	pager.screen = twin.NewFakeScreen(80, screenHeight)
@@ -83,9 +83,9 @@ func tryScrollAmount(t *testing.T, scrollFrom linemetadata.Index, scrollDistance
 
 	pager.scrollPosition = scrollPosition{
 		internalDontTouch: scrollPositionInternal{
-			name:             "tryScrollAmount",
-			lineIndex:        &scrollFrom,
-			deltaScreenLines: scrollDistance,
+			name:      "tryScrollAmount",
+			lineIndex: &scrollFrom,
+			delta:     scrollDistance,
 		},
 	}
 
@@ -95,8 +95,8 @@ func tryScrollAmount(t *testing.T, scrollFrom linemetadata.Index, scrollDistance
 
 	// Sanity check the result
 	assert.Assert(t, rendered.lines != nil)
-	assert.Equal(t, len(rendered.lines), pager.visibleHeight())
-	assert.Equal(t, rendered.lines[0].inputLineIndex, scrollFrom.NonWrappingAdd(scrollDistance))
+	assert.Equal(t, len(rendered.lines), int(pager.visibleHeight()))
+	assert.Equal(t, rendered.lines[0].inputLineIndex, scrollFrom.NonWrappingAdd(int(scrollDistance)))
 }
 
 // Repro for https://github.com/walles/moor/issues/313: Rapid scroll
@@ -113,26 +113,82 @@ func TestIssue338(t *testing.T) {
 
 func TestMultipleScrollStartsAcross1000DoNotPanic(t *testing.T) {
 	for scrollFrom := 1000 - screenHeight - 10; scrollFrom <= 1000; scrollFrom++ {
-		tryScrollAmount(t, linemetadata.IndexFromZeroBased(scrollFrom), screenHeight)
+		tryScrollAmount(t, linemetadata.IndexFromZeroBased(scrollFrom), linemetadata.ScreenLines(screenHeight))
 	}
 }
 
 func TestMultipleScrollDistancesAcross1000DoNotPanic(t *testing.T) {
 	scrollFrom := 1000 - screenHeight - 10
 	for scrollDistance := 0; scrollDistance <= 3*screenHeight; scrollDistance++ {
-		tryScrollAmount(t, linemetadata.IndexFromZeroBased(scrollFrom), scrollDistance)
+		tryScrollAmount(t, linemetadata.IndexFromZeroBased(scrollFrom), linemetadata.ScreenLines(scrollDistance))
 	}
 }
 
 func TestMultipleBackwardsScrollStartsAcross1000DoNotPanic(t *testing.T) {
 	for scrollFrom := 1000 + screenHeight + 10; scrollFrom >= 1000; scrollFrom-- {
-		tryScrollAmount(t, linemetadata.IndexFromZeroBased(scrollFrom), -screenHeight)
+		tryScrollAmount(t, linemetadata.IndexFromZeroBased(scrollFrom), linemetadata.ScreenLines(-screenHeight))
 	}
 }
 
 func TestMultipleBackwardsScrollDistancesAcross1000DoNotPanic(t *testing.T) {
 	scrollFrom := 1000 + screenHeight + 10
 	for scrollDistance := 0; scrollDistance <= 3*screenHeight; scrollDistance++ {
-		tryScrollAmount(t, linemetadata.IndexFromZeroBased(scrollFrom), -scrollDistance)
+		tryScrollAmount(t, linemetadata.IndexFromZeroBased(scrollFrom), linemetadata.ScreenLines(-scrollDistance))
 	}
+}
+
+// Repro for https://github.com/walles/moor/issues/399.
+//
+// The bug relied on `canonicalize()` previously using a wider line-number
+// prefix length than `internalRenderLines()`, due to `canonicalize()` looking
+// ahead by `deltaScreenLines`. For example, if line 900 has a delta of 569, it
+// would check ahead ~600 lines, reaching index 1500 (4 digits), assuming a
+// 4-digit line number gutter length. But `internalRenderLines()` only looks at
+// visible lines (e.g. index 988), which is 3 digits, and therefore would
+// reserve a smaller gutter length.
+//
+// Because of this difference, `canonicalize()` used to leave less horizontal
+// space for text than `internalRenderLines()` did. This test triggers the edge
+// case by creating a line length that wraps exactly 570 times underneath the
+// wider gutter (4 digits -> forces more wraps), but only 569 times underneath
+// the narrower gutter (3 digits -> wider space -> fewer wraps). When the UI
+// tried to display the 569th wrap, `internalRenderLines()` had not generated
+// it, resulting in a "not found in allLines" panic!
+func TestIssue399(t *testing.T) {
+	// A line of 102601 characters wraps 570 times on a 185-width screen with a
+	// 4-digit gutter, but only 569 times with a 3-digit gutter.
+	const magicBug399LineLength = 102601
+
+	lineCount := 2000
+	var lines []string
+	for i := range lineCount {
+		if i == 900 {
+			lines = append(lines, strings.Repeat("A", magicBug399LineLength))
+		} else {
+			lines = append(lines, "A short line")
+		}
+	}
+	txt := strings.Join(lines, "\n")
+	r := reader.NewFromTextForTesting("test", txt)
+
+	pager := NewPager(r)
+
+	spci := scrollPositionInternal{
+		lineIndex: func(i int) *linemetadata.Index {
+			idx := linemetadata.IndexFromZeroBased(i)
+			return &idx
+		}(900),
+		delta: 569,
+		name:  "scrollToSearchHits",
+	}
+
+	pager.scrollPosition = scrollPosition{
+		internalDontTouch: spci,
+	}
+
+	pager.WrapLongLines = true
+	pager.ShowLineNumbers = true
+	pager.screen = twin.NewFakeScreen(185, 88)
+
+	pager.redraw("")
 }
