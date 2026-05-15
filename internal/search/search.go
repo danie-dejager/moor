@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/charlievieth/strcase"
 )
@@ -57,12 +58,9 @@ func (search *Search) For(s string) *Search {
 	}
 
 	if search.isSubstringSearch {
-		// Pattern still needed for GetMatchRanges()
-		search.pattern, err = regexp.Compile(regexp.QuoteMeta(s))
-		if err != nil {
-			panic(err)
-		}
-
+		// No need to compile a regexp pattern since GetMatchRanges and Matches
+		// use fast paths for substring searches.
+		search.pattern = nil
 		return search
 	}
 
@@ -124,8 +122,45 @@ func (search Search) GetMatchRanges(String string) *MatchRanges {
 		String = strings.ToLower(String)
 	}
 
+	regexpSearch := !search.isSubstringSearch
+	if regexpSearch {
+		return &MatchRanges{
+			Matches: toRunePositions(search.pattern.FindAllStringIndex(String, -1), String),
+		}
+	}
+
+	// Faster code for non-regexp search follows
+
+	offset := 0
+	currentByteIndex := 0
+	currentRuneIndex := 0
+
+	var matches [][2]int
+
+	for {
+		idx := strings.Index(String[offset:], search.findMe)
+		if idx == -1 {
+			break
+		}
+
+		matchStart := offset + idx
+		matchEnd := matchStart + len(search.findMe)
+
+		// Advance to the start of the match
+		currentRuneIndex += utf8.RuneCountInString(String[currentByteIndex:matchStart])
+		fromRuneIndex := currentRuneIndex
+
+		// Advance to the end of the match
+		currentRuneIndex += utf8.RuneCountInString(String[matchStart:matchEnd])
+		toRuneIndex := currentRuneIndex
+
+		currentByteIndex = matchEnd
+
+		matches = append(matches, [2]int{fromRuneIndex, toRuneIndex})
+		offset = matchEnd
+	}
 	return &MatchRanges{
-		Matches: toRunePositions(search.pattern.FindAllStringIndex(String, -1), String),
+		Matches: matches,
 	}
 }
 
@@ -137,22 +172,23 @@ func toRunePositions(byteIndices [][]int, matchedString string) [][2]int {
 		return returnMe
 	}
 
-	runeIndex := 0
-	byteIndicesToRuneIndices := make(map[int]int, 0)
-	for byteIndex := range matchedString {
-		byteIndicesToRuneIndices[byteIndex] = runeIndex
-
-		runeIndex++
-	}
-
-	// If a match touches the end of the string, that will be encoded as one
-	// byte past the end of the string. Therefore we must add a mapping for
-	// first-index-after-the-end.
-	byteIndicesToRuneIndices[len(matchedString)] = runeIndex
+	currentByteIndex := 0
+	currentRuneIndex := 0
 
 	for _, bytePair := range byteIndices {
-		fromRuneIndex := byteIndicesToRuneIndices[bytePair[0]]
-		toRuneIndex := byteIndicesToRuneIndices[bytePair[1]]
+		fromByteIndex := bytePair[0]
+		toByteIndex := bytePair[1]
+
+		// Advance to the start of the match
+		currentRuneIndex += utf8.RuneCountInString(matchedString[currentByteIndex:fromByteIndex])
+		fromRuneIndex := currentRuneIndex
+
+		// Advance to the end of the match
+		currentRuneIndex += utf8.RuneCountInString(matchedString[fromByteIndex:toByteIndex])
+		toRuneIndex := currentRuneIndex
+
+		currentByteIndex = toByteIndex
+
 		returnMe = append(returnMe, [2]int{fromRuneIndex, toRuneIndex})
 	}
 
