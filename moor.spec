@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.16.1
+Version: 2.16.2
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,7 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Mon Aug 03 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.16.2-1
 * Thu Jul 30 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.16.1-1
 * Mon Jul 27 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.15.2-1
 * Mon Jun 15 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.15.1-1
