@@ -6,7 +6,7 @@ License: BSD-2-Clause
 URL:     https://github.com/walles/moor
 Source0: https://github.com/walles/moor/archive/refs/tags/v%{version}.tar.gz
 
-%define debug_package %{nil}
+%define  debug_package %{nil}
 
 BuildRequires: curl
 BuildRequires: gcc
