@@ -263,8 +263,7 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 		Filter:        &pager.filter,
 	}
 
-	searchHistory := BootSearchHistory("")
-	pager.searchHistory = &searchHistory
+	pager.searchHistory = new(BootSearchHistory(""))
 
 	return &pager
 }
@@ -420,6 +419,7 @@ func (p *Pager) moveRight(delta int) {
 	}
 }
 
+// Reader returns the currently active reader, never nil.
 func (p *Pager) Reader() reader.Reader {
 	if p.isShowingHelp {
 		return _HelpReader
@@ -470,8 +470,7 @@ func (p *Pager) handleScrolledUp() {
 func (p *Pager) handleScrolledDown() {
 	if p.isScrolledToEnd() {
 		// Follow output
-		reallyHigh := linemetadata.IndexMax()
-		p.setTargetLine(&reallyHigh)
+		p.setTargetLine(new(linemetadata.IndexMax()))
 	} else {
 		p.setTargetLine(nil)
 	}
@@ -747,6 +746,9 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 			case twin.MouseWheelRight:
 				p.moveRight(p.SideScrollAmount)
+
+			default:
+				log.Warnf("Unhandled mouse buttons: %d", event.Buttons())
 			}
 
 		case twin.EventResize:
