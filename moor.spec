@@ -55,8 +55,8 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 - Fix scrolling to end on initial search
 * Fri Jun 12 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.15.0-1
 - Accept +/pattern command line argument
-* Tue Jun 9 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.14.0-1
-* Tue Jun 2 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.13.4-1
+* Tue Jun 09 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.14.0-1
+* Tue Jun 02 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.13.4-1
 - Fix crash on multiple files open.
 * Thu May 28 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.13.3-1
 * Fri May 11 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.13.2-1
@@ -65,26 +65,26 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 - Performance improvements for searching
 * Sun May 10 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.13.0-1
 - File reloading improvements
-* Sun May 3 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.12.3-1
+* Sun May 03 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.12.3-1
 - Fix crash
 * Thu Apr 30 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.12.2-1
 * Thu Apr 16 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.12.1-1
 * Wed Apr 15 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.12.0-1
-* Sat Mar 7 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.11.1-1
+* Sat Mar 07 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.11.1-1
 * Wed Feb 25 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.11.0-1
 * Sun Feb 22 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.5-1
 - Handle paging non-seekable files
-* Mon Feb 9 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.4-1
+* Mon Feb 09 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.4-1
 - Fix bug pressing "n" at the bottom of the input.
 * Wed Jan 28 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.3-1
 - Fix two crashes
 * Mon Jan 19 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.2-1
-* Fri Jan 2 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.1-1
-* Tue Dec 17 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.6-1
+* Fri Jan 02 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.10.1-1
+* Wed Dec 17 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.6-1
 - Various improvements
-* Tue Dec 9 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.5-1
+* Tue Dec 09 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.5-1
 - Fix non-working case insensitive search
-* Sat Dec 6 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.4-1
+* Sat Dec 06 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.4-1
 * Sun Nov 30 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.3-1
 - Search performance improvements
 * Sat Nov 15 2025 - Danie de Jager <danie.dejager@gmail.com> - 2.9.2-1
