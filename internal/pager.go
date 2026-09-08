@@ -913,7 +913,7 @@ func (p *Pager) ReprintAfterExit() {
 	}
 
 	if screenLinesCount > 0 {
-		p.screen.ShowNLines(screenLinesCount)
+		p.screen.PrintLines(screenLinesCount)
 		fmt.Println()
 	}
 }
