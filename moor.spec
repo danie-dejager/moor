@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.18.0
+Version: 2.19.0
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,8 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Tue Sep 08 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.0-1
+- Go requirement relaxed to 1.25
 * Wed Aug 26 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.18.0-1
 - Support embedding moor with your own screen
 * Mon Aug 17 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.17.0-1
