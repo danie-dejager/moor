@@ -3,6 +3,7 @@ package internal
 import (
 	"testing"
 
+	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
 )
@@ -58,4 +59,27 @@ func TestPagerModeFilter_SharesSearchHistoryWithSearchMode(t *testing.T) {
 	searchMode.onKey(twin.KeyUp)
 
 	assert.Equal(t, "from filter", searchMode.inputBox.text)
+}
+
+// Pressing ESC should return the view to wherever it was scrolled to before
+// filtering started, the same way search's ESC does, even though filtering
+// out non-matching lines may have moved the pager's scroll position while
+// typing.
+//
+// Ref: https://github.com/walles/moor/issues/466
+func TestPagerModeFilter_EscapeRestoresScrollPositionFromBeforeFiltering(t *testing.T) {
+	pager := createThreeLinesPager(t)
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(4), "before filtering")
+	initialIndex := pager.lineIndex().Index()
+
+	filterMode := NewPagerModeFilter(pager, pager.scrollPosition)
+	filterMode.onRune('a') // Filters down to only the line containing "a"
+
+	// This mirrors what a real redraw does, and confirms filtering really did
+	// move the scroll position as a side effect.
+	assert.Assert(t, pager.lineIndex().Index() != initialIndex, "Filtering should have moved the scroll position")
+
+	filterMode.onKey(twin.KeyEscape)
+
+	assert.Equal(t, initialIndex, pager.lineIndex().Index())
 }

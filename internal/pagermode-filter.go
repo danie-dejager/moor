@@ -53,6 +53,7 @@ func (m *PagerModeFilter) onKey(key twin.KeyCode) {
 		m.pager.mode = PagerModeViewing{pager: m.pager}
 		m.pager.filter = search.Search{}
 		m.pager.search.Clear()
+		m.pager.scrollPosition = m.initialScrollPosition
 
 	case twin.KeyUp:
 		if text, ok := m.history.Move(-1); ok {
