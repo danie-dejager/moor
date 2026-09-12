@@ -309,6 +309,7 @@ func TestShortenedInput(t *testing.T) {
 		readers: []*reader.ReaderImpl{reader.NewFromTextForTesting("test", "first\n"+strings.Repeat("line\n", 1000))},
 
 		scrollPosition: newScrollPosition("TestShortenedInput"),
+		searchHistory:  &SearchHistory{},
 	}
 
 	// Hide the status bar for this test
@@ -323,7 +324,7 @@ func TestShortenedInput(t *testing.T) {
 	pager.scrollToEnd()
 	assert.Equal(t, pager.lineIndex().Index(), 991, "This should have been the effect of calling scrollToEnd()")
 
-	pager.mode = NewPagerModeFilter(&pager)
+	pager.mode = NewPagerModeFilter(&pager, pager.scrollPosition)
 	pager.filter = search.For("first") // Match only the first line
 
 	rendered := pager.renderLines()
@@ -351,6 +352,7 @@ func TestShortenedInputManyLines(t *testing.T) {
 		screen:         twin.NewFakeScreen(20, 10),
 		readers:        []*reader.ReaderImpl{reader.NewFromTextForTesting("test", strings.Join(lines, "\n"))},
 		scrollPosition: newScrollPosition("TestShortenedInputManyLines"),
+		searchHistory:  &SearchHistory{},
 	}
 
 	pager.filteringReader = FilteringReader{
@@ -361,7 +363,7 @@ func TestShortenedInputManyLines(t *testing.T) {
 	pager.scrollToEnd()
 	assert.Equal(t, pager.lineIndex().Index(), 991, "Should be at the last line before filtering")
 
-	pager.mode = NewPagerModeFilter(&pager)
+	pager.mode = NewPagerModeFilter(&pager, pager.scrollPosition)
 	pager.filter = search.For(`^match`)
 
 	rendered := pager.renderLines()
