@@ -83,3 +83,17 @@ func TestPagerModeFilter_EscapeRestoresScrollPositionFromBeforeFiltering(t *test
 
 	assert.Equal(t, initialIndex, pager.lineIndex().Index())
 }
+
+// Ref: https://github.com/walles/moor/issues/466
+func TestPagerModeFilter_PgDownPersistsTypedTextAndSwitchesToViewing(t *testing.T) {
+	pager := createThreeLinesPager(t)
+	pager.searchHistory = &SearchHistory{} // No file backing, keep this test disk-free
+
+	filterMode := NewPagerModeFilter(pager, pager.scrollPosition)
+	pager.mode = filterMode
+	filterMode.inputBox.setText("abc")
+	filterMode.onKey(twin.KeyPgDown)
+
+	assert.DeepEqual(t, []string{"abc"}, pager.searchHistory.entries)
+	assert.Equal(t, "Viewing", modeName(pager))
+}

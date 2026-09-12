@@ -67,8 +67,8 @@ func (m *PagerModeFilter) onKey(key twin.KeyCode) {
 
 	case twin.KeyPgUp, twin.KeyPgDown:
 		m.history.Commit(m.inputBox.text)
-		viewing := PagerModeViewing{pager: m.pager}
-		viewing.onKey(key)
+		m.pager.mode = PagerModeViewing{pager: m.pager}
+		m.pager.mode.onKey(key)
 
 	default:
 		log.Debugf("Unhandled filter key event %v", key)
