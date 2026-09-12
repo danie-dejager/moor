@@ -384,7 +384,7 @@ func pagerFromArgs(
 	lexer := flagSetFunc(flagSet,
 		"lang", nil,
 		"File contents, used for highlighting. Mime type or file extension (\"html\"). Default is to guess by filename.", parseLexerOption)
-	terminalFg := flagSet.Bool("terminal-fg", false, "Use terminal foreground color rather than style foreground for plain text")
+	terminalFg := flagSet.Bool("terminal-fg", false, "Use terminal colors rather than style colors for plain text. Try this if your terminal has a transparent or image background.")
 	noSearchLineHighlight := flagSet.Bool("no-search-line-highlight", false, "Do not highlight the background of lines with search hits")
 
 	defaultFormatter, err := parseColorsOption("auto")
