@@ -7,13 +7,17 @@ import (
 )
 
 type PagerModeFilter struct {
-	pager    *Pager
-	inputBox *InputBox
+	pager                 *Pager
+	initialScrollPosition scrollPosition // Pager position before filtering started
+	inputBox              *InputBox
+	history               *HistoryNavigator
 }
 
-func NewPagerModeFilter(p *Pager) *PagerModeFilter {
+func NewPagerModeFilter(p *Pager, initialScrollPosition scrollPosition) *PagerModeFilter {
 	m := &PagerModeFilter{
-		pager: p,
+		pager:                 p,
+		initialScrollPosition: initialScrollPosition,
+		history:               NewHistoryNavigator(p.searchHistory),
 	}
 	m.inputBox = &InputBox{
 		accept: INPUTBOX_ACCEPT_ALL,
@@ -35,19 +39,33 @@ func (m *PagerModeFilter) updateFilterPattern(text string) {
 
 func (m *PagerModeFilter) onKey(key twin.KeyCode) {
 	if m.inputBox.handleKey(key) {
+		m.history.TextEdited(m.inputBox.text)
 		return
 	}
 
 	switch key {
 	case twin.KeyEnter:
+		m.history.Commit(m.inputBox.text)
 		m.pager.mode = PagerModeViewing{pager: m.pager}
 
 	case twin.KeyEscape:
+		m.history.Commit(m.inputBox.text)
 		m.pager.mode = PagerModeViewing{pager: m.pager}
 		m.pager.filter = search.Search{}
 		m.pager.search.Clear()
 
-	case twin.KeyUp, twin.KeyDown, twin.KeyPgUp, twin.KeyPgDown:
+	case twin.KeyUp:
+		if text, ok := m.history.Move(-1); ok {
+			m.inputBox.setText(text)
+		}
+
+	case twin.KeyDown:
+		if text, ok := m.history.Move(1); ok {
+			m.inputBox.setText(text)
+		}
+
+	case twin.KeyPgUp, twin.KeyPgDown:
+		m.history.Commit(m.inputBox.text)
 		viewing := PagerModeViewing{pager: m.pager}
 		viewing.onKey(key)
 
@@ -58,4 +76,5 @@ func (m *PagerModeFilter) onKey(key twin.KeyCode) {
 
 func (m *PagerModeFilter) onRune(char rune) {
 	m.inputBox.handleRune(char)
+	m.history.TextEdited(m.inputBox.text)
 }
