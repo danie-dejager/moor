@@ -17,8 +17,7 @@ type PagerModeSearch struct {
 	initialScrollPosition scrollPosition // Pager position before search started
 	direction             SearchDirection
 	inputBox              *InputBox
-	searchHistoryIndex    int
-	userEditedText        string
+	history               *HistoryNavigator
 }
 
 func NewPagerModeSearch(p *Pager, direction SearchDirection, initialScrollPosition scrollPosition) *PagerModeSearch {
@@ -26,7 +25,7 @@ func NewPagerModeSearch(p *Pager, direction SearchDirection, initialScrollPositi
 		pager:                 p,
 		initialScrollPosition: initialScrollPosition,
 		direction:             direction,
-		searchHistoryIndex:    len(p.searchHistory.entries), // Past the end
+		history:               NewHistoryNavigator(p.searchHistory),
 	}
 	m.inputBox = &InputBox{
 		accept: INPUTBOX_ACCEPT_ALL,
@@ -52,31 +51,9 @@ func (m PagerModeSearch) drawFooter(_ string, _ string, _ string) {
 	m.inputBox.draw(m.pager.screen, "Type to search, 'ENTER' submits, 'ESC' cancels, '↑↓' navigate history", prompt)
 }
 
-func (m *PagerModeSearch) moveSearchHistoryIndex(delta int) {
-	if len(m.pager.searchHistory.entries) == 0 {
-		return
-	}
-
-	m.searchHistoryIndex += delta
-	if m.searchHistoryIndex < 0 {
-		m.searchHistoryIndex = 0
-	}
-	if m.searchHistoryIndex > len(m.pager.searchHistory.entries) {
-		m.searchHistoryIndex = len(m.pager.searchHistory.entries) // Beyond the end of the history
-	}
-
-	if m.searchHistoryIndex == len(m.pager.searchHistory.entries) {
-		// Reset to whatever the user typed last
-		m.inputBox.setText(m.userEditedText)
-	} else {
-		// Get the history entry
-		m.inputBox.setText(m.pager.searchHistory.entries[m.searchHistoryIndex])
-	}
-}
-
 // Exit search mode, skip back to where we started
 func (m *PagerModeSearch) abort() {
-	m.pager.searchHistory.addEntry(m.inputBox.text)
+	m.history.Commit(m.inputBox.text)
 	m.pager.mode = PagerModeViewing{pager: m.pager}
 	m.pager.scrollPosition = m.initialScrollPosition
 	m.pager.setTargetLine(nil) // Viewing doesn't need all lines
@@ -84,14 +61,13 @@ func (m *PagerModeSearch) abort() {
 
 func (m *PagerModeSearch) onKey(key twin.KeyCode) {
 	if m.inputBox.handleKey(key) {
-		m.searchHistoryIndex = len(m.pager.searchHistory.entries) // Reset history index when user types
-		m.userEditedText = m.inputBox.text
+		m.history.TextEdited(m.inputBox.text)
 		return
 	}
 
 	switch key {
 	case twin.KeyEnter:
-		m.pager.searchHistory.addEntry(m.inputBox.text)
+		m.history.Commit(m.inputBox.text)
 		m.pager.mode = PagerModeViewing{pager: m.pager}
 		m.pager.setTargetLine(nil) // Viewing doesn't need all lines
 
@@ -99,16 +75,20 @@ func (m *PagerModeSearch) onKey(key twin.KeyCode) {
 		m.abort()
 
 	case twin.KeyPgUp, twin.KeyPgDown:
-		m.pager.searchHistory.addEntry(m.inputBox.text)
+		m.history.Commit(m.inputBox.text)
 		m.pager.mode = PagerModeViewing{pager: m.pager}
 		m.pager.mode.onKey(key)
 		m.pager.setTargetLine(nil) // Viewing doesn't need all lines
 
 	case twin.KeyUp:
-		m.moveSearchHistoryIndex(-1)
+		if text, ok := m.history.Move(-1); ok {
+			m.inputBox.setText(text)
+		}
 
 	case twin.KeyDown:
-		m.moveSearchHistoryIndex(1)
+		if text, ok := m.history.Move(1); ok {
+			m.inputBox.setText(text)
+		}
 
 	default:
 		log.Debugf("Unhandled search key event %v", key)
@@ -122,7 +102,6 @@ func (m *PagerModeSearch) onRune(char rune) {
 		return
 	}
 
-	m.searchHistoryIndex = len(m.pager.searchHistory.entries) // Reset history index when user types
 	m.inputBox.handleRune(char)
-	m.userEditedText = m.inputBox.text
+	m.history.TextEdited(m.inputBox.text)
 }
