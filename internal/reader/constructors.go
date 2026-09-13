@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -135,6 +136,8 @@ func newReaderFromStream(reader io.Reader, originalFileName *string, formatter c
 	returnMe := ReaderImpl{
 		FileName:    originalFileName,
 		DisplayName: displayFileName,
+
+		StartedAt: time.Now(),
 
 		streamCloser: streamCloser,
 
