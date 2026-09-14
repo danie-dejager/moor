@@ -116,6 +116,15 @@ type ReaderImpl struct {
 
 	Err error
 
+	// When we started reading this stream, once its first bytes had already
+	// arrived. Nothing paints before that point (see AwaitFirstByte(), which
+	// blocks pager startup on exactly this), so time spent waiting for a slow
+	// producer's first byte can't cause a --quit-if-one-screen blink and is
+	// correctly excluded here. Used for reporting how far into the read we were
+	// when something happened, alongside the "Stream read in" duration logged
+	// once ReadingDone.
+	StartedAt time.Time
+
 	// Stream has been completely read. May not be highlighted yet.
 	ReadingDone *atomic.Bool
 

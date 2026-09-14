@@ -666,6 +666,9 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 	log.Info("Entering pager main loop...")
 
+	paintedWhileReading := false
+	paintedAfter := time.Duration(0)
+
 	// Main loop
 	spinner := ""
 	for !p.quit {
@@ -696,23 +699,40 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 				p.DeInit = false          // Makes ReprintAfterExit() be called on the way out
 				p.quit = true
 
-				log.Info("Exiting because of --quit-if-one-screen, everything fit on one screen and we're done")
+				if paintedWhileReading {
+					log.Warnf("--quit-if-one-screen blinked: input was still arriving after %s so we painted rather than wait, all of it had arrived after %s",
+						paintedAfter, time.Since(r.StartedAt))
+				} else {
+					log.Info("Exiting because of --quit-if-one-screen: everything fits on one screen")
+				}
 
 				// Exit the main loop
 				break
 			}
 
-			// Highlighting can still grow the contents past one screen, so we
-			// don't know yet whether we are staying. Painting now and quitting
-			// right after is the blink of issue #425, so paint nothing and let
-			// the event read below wait for highlighting instead: it signals
-			// MaybeDone when it lands.
+			// Two things can still flip canQuit from "yes" to "no":
+			// highlighting and reading (we don't know the final count until
+			// it's done). We hold the paint below for highlighting, since it's
+			// fast and bounded, but not for reading: a slow or endless producer
+			// would otherwise leave the screen blank forever. So when reading
+			// is the only thing still pending, we paint immediately and risk
+			// the blink from issue #464, instead of holding out the way #425's
+			// fix does for highlighting.
 			//
 			// Somebody who is interacting gets painted for regardless, which
 			// also means a reader that never finishes highlighting costs them a
 			// keypress rather than the whole session.
 			holdPaint := canQuit && !p.sawUserInput
 			if !holdPaint {
+				quitIfOneScreenApplies := p.QuitIfOneScreen && !p.isShowingHelp && len(p.readers) == 1
+				stillReading := !r.ReadingDone.Load()
+				if quitIfOneScreenApplies && stillReading && !paintedWhileReading {
+					// Remembered so that if this does turn into the #464
+					// blink, the warning above can say how early we painted.
+					paintedWhileReading = true
+					paintedAfter = time.Since(r.StartedAt)
+				}
+
 				p.redraw(spinner)
 			}
 		}

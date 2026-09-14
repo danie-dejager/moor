@@ -188,7 +188,7 @@ func (m PagerModeViewing) onRune(char rune) {
 		if !p.isShowingHelp {
 			// Filtering the help text is not supported. Feel free to work on
 			// that if you feel that's time well spent.
-			p.mode = NewPagerModeFilter(p)
+			p.mode = NewPagerModeFilter(p, p.scrollPosition)
 			p.search.Clear()
 			p.filter = search.Search{}
 		}
