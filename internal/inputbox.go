@@ -31,8 +31,8 @@ type InputBox struct {
 	onTextChanged InputBoxOnTextChanged
 }
 
-// draw renders the input box at the bottom line of the screen, showing a
-// simple prompt and the current text with a reverse attribute cursor.
+// draw renders the input box at the bottom line of the screen, showing a simple
+// prompt and the current text, with the cursor placed at the insertion point.
 func (b *InputBox) draw(screen twin.Screen, keys_help string, prompt string) {
 	width, height := screen.Size()
 	pos := 0
@@ -59,18 +59,11 @@ func (b *InputBox) draw(screen twin.Screen, keys_help string, prompt string) {
 		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: ch, Style: twin.StyleDefault})
 	}
 
-	// If cursor is on a rune, invert that rune. If cursor is at the end,
-	// show an inverted blank cell.
-	if b.cursorPos < len(textRunes) {
-		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: textRunes[b.cursorPos], Style: twin.StyleDefault.WithAttr(twin.AttrReverse)})
+	screen.ShowCursor(pos, height-1)
 
-		// Draw right side after the cursor rune
-		for i := b.cursorPos + 1; i < len(textRunes); i++ {
-			pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: textRunes[i], Style: twin.StyleDefault})
-		}
-	} else {
-		// Cursor at end -> reverse blank
-		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: ' ', Style: twin.StyleDefault.WithAttr(twin.AttrReverse)})
+	// Draw right side (cursor position and after)
+	for i := b.cursorPos; i < len(textRunes); i++ {
+		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: textRunes[i], Style: twin.StyleDefault})
 	}
 
 	afterTextPos := pos
