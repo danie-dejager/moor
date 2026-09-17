@@ -1,6 +1,6 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
-Version: 2.19.1
+Version: 2.19.2
 Release: 1%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
@@ -44,6 +44,8 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Thu Sep 17 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.2-1
+- Use terminal's own cursor in prompts
 * Mon Sep 14 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.1-1
 - Let filter share history with search
 * Tue Sep 08 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.0-1
