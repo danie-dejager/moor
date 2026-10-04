@@ -28,11 +28,15 @@ const (
 	altScreenLeave = "\x1b[?1049l"
 )
 
-// Moor asks the terminal for its background color on startup. A real terminal
-// answers; the color below is black, but which color it is doesn't matter here.
+// On startup, twin asks the terminal for its background color, followed by a
+// cursor position query that twin uses as an end marker. Terminals answer in
+// order. Leaving out the cursor position response makes every startup wait out
+// twin's timeout. The color below is black and the position is the top left
+// corner, but neither value matters here.
 const (
-	backgroundQuery  = "\x1b]11;?"
-	backgroundAnswer = "\x1b]11;rgb:0000/0000/0000\x07"
+	backgroundResponse     = "\x1b]11;rgb:0000/0000/0000\x07"
+	cursorPositionQuery    = "\x1b[6n"
+	cursorPositionResponse = "\x1b[1;1R"
 )
 
 // How long tests wait for moor to write something, or to exit.
@@ -101,16 +105,18 @@ type ptySession struct {
 	lock   sync.Mutex
 	output bytes.Buffer
 
-	// After startMoor() returns, only the capture() goroutine touches this
+	// After startMoor() returns, only the capture() goroutine touches these
 	answerBackgroundQuery bool
+	answeredQueries       bool
 }
 
 // How to start moor. See startMoor().
 type moorOptions struct {
-	// Answer moor's terminal background color query the way a real terminal
-	// would. Without this moor has to wait out its answer timeout, just like on
-	// terminals not supporting the query. Both are real world cases, and moor's
-	// startup timing differs a lot between them.
+	// Answer twin's terminal background color query the way a real terminal
+	// would. Without this twin gets only the cursor position response, just like
+	// on terminals not supporting the background color query. Both are real
+	// world cases, and only in the first one does moor know the background
+	// color.
 	answerBackgroundQuery bool
 
 	// "NAME=value" entries added to moor's otherwise minimal environment.
@@ -213,8 +219,9 @@ func startMoor(t *testing.T, options moorOptions) *ptySession {
 	return session
 }
 
-// Reads moor's output until moor is gone, answering the terminal background
-// color query on the way if we're supposed to.
+// Reads moor's output until moor is gone, answering the startup terminal
+// queries on the way: the cursor position query always, and the background
+// color query before it if we're supposed to.
 func (s *ptySession) capture() {
 	defer close(s.exited)
 
@@ -227,12 +234,19 @@ func (s *ptySession) capture() {
 		if count > 0 {
 			s.lock.Lock()
 			s.output.Write(buffer[:count])
-			sawQuery := bytes.Contains(s.output.Bytes(), []byte(backgroundQuery))
+			// The cursor position query comes last, so by the time we see it
+			// we have seen the background color query as well
+			sawQueries := bytes.Contains(s.output.Bytes(), []byte(cursorPositionQuery))
 			s.lock.Unlock()
 
-			if s.answerBackgroundQuery && sawQuery {
-				s.answerBackgroundQuery = false
-				_, _ = s.master.Write([]byte(backgroundAnswer))
+			if sawQueries && !s.answeredQueries {
+				s.answeredQueries = true
+
+				response := cursorPositionResponse
+				if s.answerBackgroundQuery {
+					response = backgroundResponse + response
+				}
+				_, _ = s.master.Write([]byte(response))
 			}
 		}
 
