@@ -45,7 +45,7 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 
 %changelog
 * Fri Oct 09 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.3-1
-- Add Mouse wheel support
+- Mouse support out of the box in more terminals
 * Thu Sep 17 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.2-1
 - Use terminal's own cursor in prompts
 * Mon Sep 14 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.1-1
