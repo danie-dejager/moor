@@ -68,6 +68,12 @@ type Pager struct {
 	// Written and read only by the main loop, like quit above, so no locking.
 	sawUserInput bool
 
+	// Set when the user scrolls down. On the next redraw, we start following
+	// the end of the input if the user scrolled all the way there.
+	//
+	// Written and read only by the main loop, like quit above, so no locking.
+	pendingFollowCheck bool
+
 	scrollPosition scrollPosition
 
 	// How far right we have scrolled horizontally. The unit is visual screen
@@ -469,13 +475,28 @@ func (p *Pager) handleScrolledUp() {
 	p.setTargetLine(nil)
 }
 
+// Call after scrolling down. Cheap. If we ended up at the end of the input,
+// following it starts on the next redraw.
 func (p *Pager) handleScrolledDown() {
-	if p.isScrolledToEnd() {
-		// Follow output
-		p.setTargetLine(ptr.To(linemetadata.IndexMax()))
-	} else {
-		p.setTargetLine(nil)
+	p.setTargetLine(nil)
+
+	// After setTargetLine(), which clears it
+	p.pendingFollowCheck = true
+}
+
+// Start following the end of the input if the user scrolled down to it since
+// the last call. Expensive when a check is pending, cheap otherwise.
+func (p *Pager) followIfScrolledToEnd() {
+	if !p.pendingFollowCheck {
+		return
 	}
+	p.pendingFollowCheck = false
+
+	if !p.isScrolledToEnd() {
+		return
+	}
+
+	p.setTargetLine(ptr.To(linemetadata.IndexMax()))
 }
 
 func (p *Pager) handleMoreLinesAvailable() {
@@ -513,6 +534,11 @@ func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
 
 	log.Trace("Pager: Setting target line to ", targetLine, "...")
 	p.TargetLine = targetLine
+
+	// An explicit target wins over any not-yet-done follow check from an
+	// earlier scroll down
+	p.pendingFollowCheck = false
+
 	if targetLine == nil {
 		// No target, just do your thing
 		r.SetPauseAfterLines(reader.DEFAULT_PAUSE_AFTER_LINES)

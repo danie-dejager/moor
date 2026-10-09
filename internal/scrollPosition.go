@@ -380,8 +380,8 @@ func (p *Pager) scrollToEnd() {
 	}
 }
 
-// Can be either because Pager.scrollToEnd() was just called or because the user
-// has pressed the down arrow enough times.
+// True if the end of the input is visible on screen. Expensive, don't call too
+// often.
 func (p *Pager) isScrolledToEnd() bool {
 	inputLineCount := p.Reader().GetLineCount()
 	if inputLineCount == 0 {
