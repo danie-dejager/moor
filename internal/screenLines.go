@@ -43,6 +43,7 @@ type renderedScreen struct {
 // Refresh the whole pager display, both contents lines and the status line at
 // the bottom, and show the result on the terminal
 func (p *Pager) redraw(spinner string) {
+	p.followIfScrolledToEnd()
 	p.renderIntoCells(spinner)
 	p.screen.Show()
 }
