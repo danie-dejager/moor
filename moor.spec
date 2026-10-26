@@ -1,7 +1,7 @@
 Name:    moor
 Summary: Simple UTF-8 pager with sensible defaults
 Version: 2.19.5
-Release: 1%{?dist}
+Release: 2%{?dist}
 License: BSD-2-Clause
 URL:     https://github.com/walles/moor
 Source0: https://github.com/walles/moor/archive/refs/tags/v%{version}.tar.gz
@@ -44,6 +44,7 @@ install -m 644 %{name}.1.gz %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/%{name}.1.gz
 
 %changelog
+* Mon Oct 26 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.5-2
 * Sat Oct 17 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.5-1
 * Fri Oct 09 2026 - Danie de Jager <danie.dejager@gmail.com> - 2.19.3-1
 - Mouse support out of the box in more terminals
