@@ -177,8 +177,12 @@ func TestZstdReaderClosedWhileReading(t *testing.T) {
 	testMe.Close()
 	close(src.proceed)
 
-	done := make(chan error, 1)
-	go func() { done <- testMe.Wait() }()
+	// Only finishing matters here, not what Wait() returns after Close()
+	done := make(chan struct{})
+	go func() {
+		_ = testMe.Wait()
+		close(done)
+	}()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
