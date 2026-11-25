@@ -3,12 +3,14 @@ package reader
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/reader/readsummary"
 	"gotest.tools/v3/assert"
 )
 
@@ -18,6 +20,12 @@ import (
 // goroutine) starts, so there's no data race with tailFile()'s reads of it.
 func TestMain(m *testing.M) {
 	tailPollInterval = 10 * time.Millisecond
+	sameFile = func(oldStat, newStat os.FileInfo) bool {
+		if _, isFake := oldStat.(fakeFileInfo); isFake {
+			return true
+		}
+		return os.SameFile(oldStat, newStat)
+	}
 	os.Exit(m.Run())
 }
 
@@ -59,6 +67,20 @@ func waitForCondition(t *testing.T, condition func() bool, errMsg string) {
 	t.Fatalf("timed out: %s", errMsg)
 }
 
+// Wait for testMe to ask for a reload, then do what the pager would do and
+// return a fresh clone of it
+func waitForReload(t *testing.T, testMe *ReaderImpl) *ReaderImpl {
+	t.Helper()
+	waitForCondition(t, testMe.WantsReload, "waiting for a reload request")
+
+	clone, err := testMe.Clone()
+	assert.NilError(t, err)
+	t.Cleanup(clone.Close)
+	assert.NilError(t, clone.Wait())
+
+	return clone
+}
+
 func assertLines(t *testing.T, testMe *ReaderImpl, expectedLines ...string) {
 	t.Helper()
 	allLines := testMe.GetLines(linemetadata.Index{}, len(expectedLines)+10)
@@ -73,7 +95,7 @@ func TestReadUpdatingFile(t *testing.T) {
 	const firstLineString = "First line\n"
 	testMe, file := setupWatcherTest(t, firstLineString)
 
-	assert.Equal(t, int(testMe.bytesCount), len([]byte(firstLineString)))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte(firstLineString)))
 	assertLines(t, testMe, "First line")
 
 	const secondLineString = "Second line\n"
@@ -82,7 +104,7 @@ func TestReadUpdatingFile(t *testing.T) {
 
 	waitForLineCount(t, testMe, 2)
 	assertLines(t, testMe, "First line", "Second line")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte(firstLineString+secondLineString)))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte(firstLineString+secondLineString)))
 
 	const thirdLineString = "Third line\n"
 	_, err = file.WriteString(thirdLineString)
@@ -90,7 +112,7 @@ func TestReadUpdatingFile(t *testing.T) {
 
 	waitForLineCount(t, testMe, 3)
 	assertLines(t, testMe, "First line", "Second line", "Third line")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte(firstLineString+secondLineString+thirdLineString)))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte(firstLineString+secondLineString+thirdLineString)))
 }
 
 // If a file is rewritten (shrunk and replaced with new content), tailing should
@@ -103,13 +125,7 @@ func TestReadShrunkFile(t *testing.T) {
 	err := os.WriteFile(file.Name(), []byte("New\n"), 0600)
 	assert.NilError(t, err)
 
-	waitForCondition(t, func() bool {
-		allLines := testMe.GetLines(linemetadata.Index{}, 10)
-		return len(allLines.Lines) == 1 && allLines.Lines[0].Plain() == "New"
-	}, "waiting for shrunk file to reload with 'New'")
-
-	assert.NilError(t, testMe.Wait())
-	assertLines(t, testMe, "New")
+	assertLines(t, waitForReload(t, testMe), "New")
 }
 
 // If people keep appending to the currently opened file we should display those
@@ -133,7 +149,7 @@ func TestReadUpdatingFile_InitiallyEmpty(t *testing.T) {
 // This test verifies it with the initial contents not ending with a linefeed.
 func TestReadUpdatingFile_HalfLine(t *testing.T) {
 	testMe, file := setupWatcherTest(t, "Start")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte("Start")))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte("Start")))
 
 	const secondLineString = ", end\n"
 	_, err := file.WriteString(secondLineString)
@@ -145,7 +161,7 @@ func TestReadUpdatingFile_HalfLine(t *testing.T) {
 	}, "waiting for line to update")
 
 	assertLines(t, testMe, "Start, end")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte("Start, end\n")))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte("Start, end\n")))
 }
 
 // If people keep appending to the currently opened file we should display those
@@ -167,7 +183,7 @@ func TestReadUpdatingFile_HalfUtf8(t *testing.T) {
 	}, "waiting for utf-8 char to complete")
 
 	assertLines(t, testMe, "här")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte("här")))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte("här")))
 }
 
 // If a file is completely rewritten and ends up not smaller than before, but clearly
@@ -181,13 +197,102 @@ func TestReadRewrittenFile_Replaced(t *testing.T) {
 	err := os.WriteFile(file.Name(), []byte(replacementRow), 0600)
 	assert.NilError(t, err)
 
-	waitForCondition(t, func() bool {
-		allLines := testMe.GetLines(linemetadata.Index{}, 10)
-		return len(allLines.Lines) == 1 && allLines.Lines[0].Plain() == "Totally different data replaces the whole file"
-	}, "waiting for rewrite to reload")
+	assertLines(t, waitForReload(t, testMe), "Totally different data replaces the whole file")
+}
 
-	assert.NilError(t, testMe.Wait())
-	assertLines(t, testMe, "Totally different data replaces the whole file")
+// If a small file is appended to and then rewritten in place, starting with
+// the original contents and growing, tailing should reload rather than append.
+func TestReadRewrittenFile_AfterAppend(t *testing.T) {
+	testMe, file := setupWatcherTest(t, "a\n")
+
+	_, err := file.WriteString("b\n")
+	assert.NilError(t, err)
+	waitForLineCount(t, testMe, 2)
+	waitForCondition(t, func() bool {
+		testMe.RLock()
+		defer testMe.RUnlock()
+		return testMe.lastStat.Size() == 4
+	}, "waiting for the append to be noticed")
+
+	_, err = file.WriteAt([]byte("a\nc\nd\n"), 0)
+	assert.NilError(t, err)
+
+	assertLines(t, waitForReload(t, testMe), "a", "c", "d")
+}
+
+// The first line of these is longer than the header we track, so only the
+// bytes after it can tell the files apart
+var longFirstLine = strings.Repeat("x", 2000)
+var originalContents = longFirstLine + "\nold\n"
+var replacementContents = longFirstLine + "\nnew\nlonger\n"
+
+// If a file is rewritten in place, starting with the same bytes and growing,
+// tailing should reload rather than append.
+//
+// Ref: https://github.com/walles/moor/pull/479
+func TestReadRewrittenFile_SameStart(t *testing.T) {
+	testMe, file := setupWatcherTest(t, originalContents)
+	assertLines(t, testMe, longFirstLine, "old")
+
+	_, err := file.WriteAt([]byte(replacementContents), 0)
+	assert.NilError(t, err)
+
+	assertLines(t, waitForReload(t, testMe), longFirstLine, "new", "longer")
+}
+
+// If another file is moved into place, starting with the same bytes and being
+// longer, tailing should reload rather than append.
+//
+// Ref: https://github.com/walles/moor/pull/479
+func TestReadReplacedFile_SameStart(t *testing.T) {
+	testMe, file := setupWatcherTest(t, originalContents)
+	assertLines(t, testMe, longFirstLine, "old")
+
+	// Windows refuses renaming over files that are open
+	assert.NilError(t, file.Close())
+
+	replacement := file.Name() + ".new"
+	err := os.WriteFile(replacement, []byte(replacementContents), 0600)
+	assert.NilError(t, err)
+	t.Cleanup(func() { _ = os.Remove(replacement) })
+	assert.NilError(t, os.Rename(replacement, file.Name()))
+
+	assertLines(t, waitForReload(t, testMe), longFirstLine, "new", "longer")
+}
+
+// Appending to a file must be taken for an append. Reloading would show the
+// same lines, so the tests that only check lines can't tell these apart.
+func TestDetermineTailAction_RealAppend(t *testing.T) {
+	// Longer than the header and the trailer together
+	contents := []byte(strings.Repeat("0123456789\n", 300))
+
+	for _, appended := range []string{"x", "More lines\nAnd more\n"} {
+		t.Run(appended, func(t *testing.T) {
+			fileName := filepath.Join(t.TempDir(), "file.txt")
+			assert.NilError(t, os.WriteFile(fileName, contents, 0600))
+
+			// Read in two chunks with the trailer spanning both of them
+			var readSoFar readsummary.Summary
+			split := len(contents) - 500
+			readSoFar.Add(contents[:split])
+			readSoFar.Add(contents[split:])
+
+			oldStat, err := os.Stat(fileName)
+			assert.NilError(t, err)
+
+			file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, 0)
+			assert.NilError(t, err)
+			_, err = file.WriteString(appended)
+			assert.NilError(t, err)
+			assert.NilError(t, file.Close())
+
+			newStat, err := os.Stat(fileName)
+			assert.NilError(t, err)
+
+			action := determineTailAction(fileName, false, oldStat, newStat, nil, &readSoFar)
+			assert.Equal(t, action, tailActionAppend)
+		})
+	}
 }
 
 type fakeFileInfo struct {
@@ -247,7 +352,7 @@ func TestDetermineTailAction(t *testing.T) {
 				oldStat,
 				fakeFileInfo{size: tt.newSize, modTime: tt.newModTime},
 				tt.statErr,
-				nil, // headerBytes
+				&readsummary.Summary{},
 			)
 			assert.Equal(t, actual, tt.expected)
 		})
@@ -264,7 +369,7 @@ func TestDetermineTailAction_gzippedUnchanged(t *testing.T) {
 
 	assert.NilError(t, testMe.Wait())
 
-	assert.Equal(t, len(testMe.headerBytes) > 0, true)
+	assert.Equal(t, len(testMe.readSoFar.Header()) > 0, true)
 
 	action := determineTailAction(
 		gzippedName,
@@ -272,8 +377,44 @@ func TestDetermineTailAction_gzippedUnchanged(t *testing.T) {
 		fakeFileInfo{size: 1234, modTime: time.Unix(1000, 0)},
 		fakeFileInfo{size: 1234, modTime: time.Unix(1000, 0)},
 		nil, // statErr
-		testMe.headerBytes,
+		&testMe.readSoFar,
 	)
 
 	assert.Equal(t, action, tailActionContinue)
+}
+
+// A file that another file was moved into place over must be reloaded, also
+// when it looks like the old file with more data at the end.
+func TestDetermineTailAction_replacedByLargerFile(t *testing.T) {
+	fileName := filepath.Join(t.TempDir(), "test.txt")
+	err := os.WriteFile(fileName, []byte("old\n"), 0600)
+	assert.NilError(t, err)
+
+	// Stat the opened file like the reader does. On Windows, a stat of the file
+	// name would get its file ID only when compared, after the rename below.
+	stream, _, oldStat, err := zOpenWithStat(fileName)
+	assert.NilError(t, err)
+	assert.Assert(t, oldStat != nil)
+	assert.NilError(t, stream.Close())
+
+	err = os.WriteFile(fileName+".new", []byte("old\nnew\n"), 0600)
+	assert.NilError(t, err)
+	err = os.Rename(fileName+".new", fileName)
+	assert.NilError(t, err)
+	newStat, err := os.Stat(fileName)
+	assert.NilError(t, err)
+
+	var readSoFar readsummary.Summary
+	readSoFar.Add([]byte("old\n"))
+
+	action := determineTailAction(
+		fileName,
+		false, // isCompressed
+		oldStat,
+		newStat,
+		nil, // statErr
+		&readSoFar,
+	)
+
+	assert.Equal(t, action, tailActionReload)
 }

@@ -4,7 +4,6 @@ package reader
 
 import (
 	"io"
-	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -33,14 +32,9 @@ func NewFromFilename(filename string, formatter chroma.Formatter, options Reader
 		return nil, fileError
 	}
 
-	stream, highlightingFilename, err := ZOpen(filename)
+	stream, highlightingFilename, initialStat, err := zOpenWithStat(filename)
 	if err != nil {
 		return nil, err
-	}
-
-	var initialStat os.FileInfo
-	if fileStats, statErr := os.Stat(filename); statErr == nil {
-		initialStat = fileStats
 	}
 
 	if options.Lexer == nil {
@@ -151,7 +145,7 @@ func newReaderFromStream(reader io.Reader, originalFileName *string, formatter c
 		highlightingStyle:       make(chan chroma.Style, 1),
 		doneWaitingForFirstByte: make(chan bool, 1),
 		HighlightingDone:        &highlightingDone,
-		ReadingDone:             &readingDone,
+		readingDone:             &readingDone,
 
 		formatter:     formatter,
 		readerOptions: options,
@@ -169,7 +163,7 @@ func newReaderFromStream(reader io.Reader, originalFileName *string, formatter c
 			// so say we're done. Otherwise everybody waiting for us waits
 			// forever: the pager holds its first paint until highlighting is
 			// done, and it spins its spinner until reading is.
-			returnMe.ReadingDone.Store(true)
+			returnMe.readingDone.Store(true)
 			returnMe.HighlightingDone.Store(true)
 			select {
 			case returnMe.MaybeDone <- true:
@@ -206,7 +200,7 @@ func NewFromTextForTesting(name string, text string) *ReaderImpl {
 	highlightingDone.Store(true) // No highlighting to do = nothing left = Done!
 	returnMe := &ReaderImpl{
 		lines:                   lines,
-		ReadingDone:             &readingDone,
+		readingDone:             &readingDone,
 		HighlightingDone:        &highlightingDone,
 		doneWaitingForFirstByte: make(chan bool, 1),
 	}
@@ -217,7 +211,7 @@ func NewFromTextForTesting(name string, text string) *ReaderImpl {
 	return returnMe
 }
 
-// Clone creates a new ReaderImpl using the same source file and options.
+// Clone creates a new ReaderImpl reading the same file, set up like this one.
 func (reader *ReaderImpl) Clone() (*ReaderImpl, error) {
 	if reader.FileName == nil {
 		return nil, nil // Ignore streams
@@ -226,7 +220,19 @@ func (reader *ReaderImpl) Clone() (*ReaderImpl, error) {
 	reader.RLock()
 	formatter := reader.formatter
 	options := reader.readerOptions
+	options.PauseAfterLines = ptr.To(reader.pauseAfterLines)
+	displayName := reader.DisplayName
 	reader.RUnlock()
 
-	return NewFromFilename(*reader.FileName, formatter, options)
+	clone, err := NewFromFilename(*reader.FileName, formatter, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Our name may have been changed after we were created
+	clone.Lock()
+	clone.DisplayName = displayName
+	clone.Unlock()
+
+	return clone, nil
 }

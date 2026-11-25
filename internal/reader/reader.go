@@ -15,6 +15,7 @@ import (
 
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/ptr"
+	"github.com/walles/moor/v2/internal/reader/readsummary"
 	"github.com/walles/moor/v2/internal/util"
 
 	"github.com/alecthomas/chroma/v2"
@@ -52,6 +53,14 @@ type ReaderOptions struct {
 	Lexer chroma.Lexer
 }
 
+// Once a line has been returned at some index, that index keeps referring to
+// the same input line for the lifetime of the Reader. Lines are only ever
+// appended. A line's contents may be replaced by a highlighted version, and
+// the last line may grow until its newline arrives, but lines are never
+// removed or renumbered.
+//
+// To show new contents of a rewritten file, replace the Reader with a new one
+// rather than changing this one.
 type Reader interface {
 	GetLineCount() int
 	GetLine(index linemetadata.Index) *NumberedLine
@@ -74,6 +83,10 @@ type Reader interface {
 	// When we're not paused, the number will be constantly changing, indicating
 	// that the counting is not done yet.
 	ShouldShowLineCount() bool
+
+	// True once all lines have been read. More may still arrive if a file is
+	// being tailed.
+	ReadingDone() bool
 }
 
 // ReaderImpl reads a file into an array of strings.
@@ -101,18 +114,8 @@ type ReaderImpl struct {
 	// True if the file we read from was compressed.
 	IsCompressed bool
 
-	// How many bytes have we successfully decoded and read into memory so far?
-	//
-	// Note: For compressed files, this is the DECOMPRESSED byte count. Do NOT
-	// compare this directly to os.FileInfo.Size() (which is the compressed size
-	// on disk), as they represent different metrics.
-	bytesCount int64
-
-	// The first bytes read from the file. Used to determine if the file was replaced
-	// or appended to when it grows.
-	headerBytes []byte
-
-	endsWithNewline bool
+	// What we know about the bytes read so far
+	readSoFar readsummary.Summary
 
 	Err error
 
@@ -122,11 +125,11 @@ type ReaderImpl struct {
 	// producer's first byte can't cause a --quit-if-one-screen blink and is
 	// correctly excluded here. Used for reporting how far into the read we were
 	// when something happened, alongside the "Stream read in" duration logged
-	// once ReadingDone.
+	// once ReadingDone().
 	StartedAt time.Time
 
 	// Stream has been completely read. May not be highlighted yet.
-	ReadingDone *atomic.Bool
+	readingDone *atomic.Bool
 
 	// Highlighting has been completed.
 	HighlightingDone *atomic.Bool
@@ -161,6 +164,9 @@ type ReaderImpl struct {
 
 	// Set to true when this reader is discarded.
 	closed atomic.Bool
+
+	// Set to true when the file has been rewritten, see WantsReload()
+	reloadWanted atomic.Bool
 
 	// The stream we are reading from, if it can be closed at all. We own it, so
 	// we close it either once we're done reading it or when this reader is
@@ -287,7 +293,7 @@ func countLines(filename string) (uint64, error) {
 // Wait for reader to finish reading and highlighting. Used by tests.
 func (reader *ReaderImpl) Wait() error {
 	// Wait for our goroutine to finish
-	for !reader.ReadingDone.Load() {
+	for !reader.readingDone.Load() {
 		if reader.PauseStatus.Load() {
 			// We want more lines
 			reader.SetPauseAfterLines(reader.GetLineCount() * 2)
@@ -360,8 +366,14 @@ func (reader *ReaderImpl) GetLineCount() int {
 	return len(reader.lines)
 }
 
+// True once the stream has been completely read. It may not be highlighted
+// yet.
+func (reader *ReaderImpl) ReadingDone() bool {
+	return reader.readingDone.Load()
+}
+
 func (reader *ReaderImpl) ShouldShowLineCount() bool {
-	if reader.ReadingDone.Load() {
+	if reader.readingDone.Load() {
 		// We are done, the number won't change, show it!
 		return true
 	}
@@ -618,6 +630,12 @@ func (reader *ReaderImpl) SetPauseAfterLines(lines int) {
 }
 
 func (reader *ReaderImpl) SetStyleForHighlighting(style chroma.Style) {
+	// Our reading goroutine picks the style up from the channel only once it
+	// is done reading. Clone() can't wait for that, so it gets it from here.
+	reader.Lock()
+	reader.readerOptions.Style = &style
+	reader.Unlock()
+
 	reader.highlightingStyle <- style
 }
 

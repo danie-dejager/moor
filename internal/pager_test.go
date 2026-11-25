@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"runtime"
@@ -824,4 +825,181 @@ func TestLeavingHelpRestoresLineNumbers(t *testing.T) {
 	assert.Assert(t, !pager.isShowingHelp)
 	assert.Equal(t, pager.leftColumnZeroBased, 16)
 	assert.Assert(t, !pager.showLineNumbers)
+}
+
+// When following, a reloaded file must be read all the way to the end, just
+// like the file it replaces.
+//
+// If this test hangs, the new reader is stuck waiting for someone to ask for
+// more lines.
+func TestReloadReadsToTheEndWhenFollowing(t *testing.T) {
+	// More lines than readers read by default
+	lineCount := 2 * reader.DEFAULT_PAUSE_AFTER_LINES
+	file := path.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("x", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.setTargetLine(ptr.To(linemetadata.IndexMax())) // Follow
+	pager.ReloadCurrentReader()
+
+	// Without a running pager, nobody asks the new reader for more lines than
+	// what it has been told to read
+	reloaded := pager.views[pager.currentView].reader
+	defer reloaded.Close()
+	waitUntil(t, reloaded.ReadingDone, func() string { return "the reloaded file to be read to the end" })
+	assert.Equal(t, reloaded.GetLineCount(), lineCount)
+}
+
+func TestCloseReadersClosesReloadedReaders(t *testing.T) {
+	// More lines than readers read by default, so that the reloaded reader
+	// pauses rather than finishing on its own
+	lineCount := 2 * reader.DEFAULT_PAUSE_AFTER_LINES
+	file := path.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("x", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.ReloadCurrentReader()
+	reloaded := pager.views[pager.currentView].reader
+	assert.Assert(t, reloaded != r, "Test setup broken, reloading should replace the reader")
+
+	pager.CloseReaders()
+
+	// A closed reader stops reading, paused or not
+	waitUntil(t, reloaded.ReadingDone, func() string { return "the reloaded reader to stop reading" })
+	assert.Assert(t, reloaded.GetLineCount() < lineCount, "Closed reader should not read to the end")
+}
+
+// Reaching the target line before there are enough lines after it to fill the
+// screen should not leave us above the target once the rest has arrived
+func TestScrollTowardsTargetLineWithFewLinesAfterIt(t *testing.T) {
+	pipeReader, pipeWriter := io.Pipe()
+	t.Cleanup(func() { _ = pipeWriter.Close() })
+	go func() {
+		_, _ = io.WriteString(pipeWriter, linesForTesting("x", 20))
+	}()
+	r, err := reader.NewFromStream("", pipeReader, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+	t.Cleanup(r.Close)
+	waitUntil(t, func() bool { return r.GetLineCount() == 20 }, func() string { return "the first lines" })
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.mode = PagerModeViewing{pager: pager}
+
+	// Five lines after the target, more than that fit on the screen
+	pager.setTargetLine(ptr.To(linemetadata.IndexFromZeroBased(15)))
+	pager.scrollTowardsTargetLine()
+	pager.renderIntoCells("")
+
+	_, err = io.WriteString(pipeWriter, linesForTesting("y", 20))
+	assert.NilError(t, err)
+	waitUntil(t, func() bool { return r.GetLineCount() == 40 }, func() string { return "the rest of the lines" })
+
+	// Like the main loop does when told about more lines
+	pager.scrollTowardsTargetLine()
+	pager.renderIntoCells("")
+
+	assert.Equal(t, pager.lineIndex().Index(), 15)
+}
+
+// A target line kept around while waiting for more lines should be let go once
+// reading is done, even if no more lines arrived. Otherwise lines added to the
+// file later, much later possibly, make us jump to it.
+func TestTargetLineLetGoWhenDone(t *testing.T) {
+	pipeReader, pipeWriter := io.Pipe()
+	go func() {
+		_, _ = io.WriteString(pipeWriter, linesForTesting("x", 20))
+	}()
+	r, err := reader.NewFromStream("", pipeReader, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+	t.Cleanup(r.Close)
+	waitUntil(t, func() bool { return r.GetLineCount() == 20 }, func() string { return "the lines" })
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.mode = PagerModeViewing{pager: pager}
+
+	// Five lines after the target, fewer than fit on the screen
+	pager.setTargetLine(ptr.To(linemetadata.IndexFromZeroBased(15)))
+	pager.scrollTowardsTargetLine()
+	assert.Assert(t, pager.TargetLine != nil, "Test setup broken, target should be kept while reading")
+
+	assert.NilError(t, pipeWriter.Close())
+	waitUntil(t, r.ReadingDone, func() string { return "reading to be done" })
+	pager.handleMaybeDone()
+
+	assert.Assert(t, pager.TargetLine == nil, "Target should be let go once reading is done")
+}
+
+// While showing help, whether the file is still loading shouldn't matter for
+// scrolling in the help text
+func TestTargetLineInHelpWhileFileIsLoading(t *testing.T) {
+	pipeReader, pipeWriter := io.Pipe()
+	t.Cleanup(func() { _ = pipeWriter.Close() })
+	go func() {
+		_, _ = io.WriteString(pipeWriter, linesForTesting("x", 20))
+	}()
+	r, err := reader.NewFromStream("", pipeReader, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+	t.Cleanup(r.Close)
+	waitUntil(t, func() bool { return r.GetLineCount() == 20 }, func() string { return "the lines" })
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.mode = PagerModeViewing{pager: pager}
+	pager.mode.onRune('h')
+	assert.Assert(t, pager.isShowingHelp, "Test setup broken, help should be showing")
+
+	// Two lines after the target, fewer than fit on the screen
+	helpLineCount := pager.Reader().GetLineCount()
+	pager.setTargetLine(ptr.To(linemetadata.IndexFromZeroBased(helpLineCount - 3)))
+	pager.scrollTowardsTargetLine()
+
+	assert.Assert(t, pager.TargetLine == nil, "The help text is all there, the target has been reached")
+}
+
+// Scrolling right should stop when the end of the longest line reaches the
+// right edge of the screen, rather than scrolling the text out of view.
+func TestScrollRightStopsAtEndOfLongestLine(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", strings.Repeat("x", 30)+"\nshort\n")
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.ShowLineNumbers = false
+	pager.showLineNumbers = false
+
+	for range 3 {
+		pager.redraw("")
+		pager.moveRight(pager.SideScrollAmount)
+	}
+
+	assert.Equal(t, pager.leftColumnZeroBased, 10)
+}
+
+// A long line scrolled off the top of the screen should not let us scroll right
+func TestScrollRightIgnoresLinesAboveScreen(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", strings.Repeat("x", 30)+"\n"+strings.Repeat("short\n", 20))
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.ShowLineNumbers = false
+	pager.showLineNumbers = false
+
+	pager.redraw("")
+	pager.scrollPosition = pager.scrollPosition.NextLine(1)
+	pager.redraw("")
+	assert.Equal(t, pager.lineIndex().Index(), 1, "Test setup broken, long line should be above the screen")
+
+	pager.moveRight(pager.SideScrollAmount)
+	assert.Equal(t, pager.leftColumnZeroBased, 0)
 }
